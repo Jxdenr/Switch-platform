@@ -5,3 +5,4 @@ psycopg==3.2.3
 psycopg-binary==3.2.3
 requests==2.32.3
 whitenoise==6.8.2
+smpplib==2.2.4  # tests only

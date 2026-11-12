@@ -1,7 +1,7 @@
 {% extends "base.html" %}
 {% block title %}{{ label }}{% endblock %}
 {% block content %}
-<div class="crumbs"><a href="/accounts/">Suppliers &amp; clients</a> / <a href="/accounts/{{ acc.pk }}/?tab={{ group }}">{{ acc }}</a></div>
+<div class="crumbs"><a href="{{ acc.list_url }}">{{ acc.list_label }}</a> / <a href="/accounts/{{ acc.pk }}/?tab={{ group }}">{{ acc }}</a></div>
 <div class="pagehead"><h1>{% if obj %}Edit{% else %}New{% endif %} {{ label }}</h1></div>
 <form class="card stack" method="post">{% csrf_token %}{% include "partials/form.html" %}
 <div><button class="btn primary">Save</button> <a class="btn" href="/accounts/{{ acc.pk }}/?tab={{ group }}">Cancel</a></div></form>

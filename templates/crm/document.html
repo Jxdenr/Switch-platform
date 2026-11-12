@@ -1,0 +1,45 @@
+{% load switch humanize %}<!doctype html>
+<html lang="en"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1">
+<title>{{ kind_label }} {{ number }} · {{ acc }}</title>
+<style>
+body{margin:0;background:#f3f4f6;color:#111827;font:14px/1.5 -apple-system,BlinkMacSystemFont,"Segoe UI",Roboto,"Helvetica Neue",Arial,sans-serif;font-variant-numeric:tabular-nums}
+.doc{max-width:820px;margin:24px auto;background:#fff;padding:40px 44px;border:1px solid #e5e7eb;border-radius:8px}
+h1{font-size:26px;margin:0 0 4px} h2{font-size:15px;margin:28px 0 8px}
+.top{display:flex;justify-content:space-between;gap:24px;flex-wrap:wrap}
+.muted{color:#6b7280} .pre{white-space:pre-line}
+table{width:100%;border-collapse:collapse;margin-top:6px} th,td{padding:7px 8px;border-bottom:1px solid #e5e7eb;text-align:left}
+th{font-size:11px;letter-spacing:.06em;text-transform:uppercase;color:#6b7280} .num{text-align:right}
+.total td{font-weight:700;border-top:2px solid #111827;border-bottom:none}
+.meta td{border:none;padding:2px 12px 2px 0} .bar{max-width:820px;margin:16px auto 0;display:flex;gap:8px}
+.bar a,.bar button{font:inherit;padding:7px 14px;border:1px solid #d1d5db;border-radius:6px;background:#fff;color:#111827;text-decoration:none;cursor:pointer}
+@media print{body{background:#fff}.doc{border:none;margin:0;padding:0}.bar{display:none}}
+</style></head><body>
+{% if not email %}<div class="bar"><a href="/accounts/{{ acc.pk }}/?tab=statement">← Back to {{ acc }}</a><button onclick="window.print()">Print / save as PDF</button><a href="?export=csv">Daily CSV</a></div>{% endif %}
+<div class="doc">
+<div class="top"><div><h1>{{ kind_label }}</h1><div class="muted">{{ number }}</div></div>
+<div style="text-align:right"><b>{{ company_name }}</b><div class="pre muted">{{ company_details }}</div></div></div>
+<div class="top" style="margin-top:28px"><div><div class="muted">{% if kind == "invoice" %}Bill to{% else %}Statement for{% endif %}</div><b>{{ acc.title }}</b>
+{% if address %}<div class="muted">{{ address.address1 }}{% if address.address2 %}, {{ address.address2 }}{% endif %}{% if address.postcode %}, {{ address.postcode }}{% endif %}{% if address.country %}, {{ address.country }}{% endif %}</div>{% endif %}</div>
+<table class="meta" style="width:auto"><tr><td class="muted">Period</td><td>{{ first|date:"j M Y" }} – {{ last|date:"j M Y" }}</td></tr>
+<tr><td class="muted">Issued</td><td>{{ issued|date:"j M Y" }}</td></tr>
+{% if acc.payment_terms %}<tr><td class="muted">Terms</td><td>{{ acc.payment_terms }}</td></tr>{% endif %}</table></div>
+
+<h2>Summary</h2>
+<table><thead><tr><th>Service</th><th class="num">Volume</th><th class="num">Amount ({{ currency }})</th></tr></thead><tbody>
+<tr><td>Inbound SMS</td><td class="num">{{ t.sms|intcomma }} messages</td><td class="num">{{ t.sms_amount|money }}</td></tr>
+{% if t.calls %}<tr><td>Inbound voice</td><td class="num">{{ t.calls|intcomma }} calls · {{ t.minutes|floatformat:0|intcomma }} min</td><td class="num">{{ t.voice_amount|money }}</td></tr>{% endif %}
+<tr class="total"><td>{% if kind == "invoice" %}Amount due to {{ company_name }}{% else %}Amount payable to {{ acc.title }}{% endif %}</td><td></td><td class="num">{{ t.total|money }}</td></tr>
+</tbody></table>
+<p class="muted" style="font-size:12px">Amounts exclude VAT/tax unless stated. {% if kind == "invoice" %}Please pay within your agreed terms using the bank details above, quoting {{ number }}.{% else %}This statement shows the traffic delivered to you and what we owe you for the period.{% endif %}</p>
+
+{% if by_group|length > 1 %}<h2>By billing group</h2>
+<table><thead><tr><th>Billing group</th><th class="num">SMS</th><th class="num">Calls</th><th class="num">Minutes</th><th class="num">Amount</th></tr></thead><tbody>
+{% for r in by_group %}<tr><td>{{ r.key|default:"(none)" }}</td><td class="num">{{ r.sms|intcomma }}</td><td class="num">{{ r.calls|intcomma }}</td><td class="num">{{ r.minutes|floatformat:0 }}</td><td class="num">{{ r.total|money }}</td></tr>{% endfor %}
+</tbody></table>{% endif %}
+
+<h2>By day</h2>
+<table><thead><tr><th>Day</th><th class="num">SMS</th><th class="num">SMS amount</th><th class="num">Calls</th><th class="num">Minutes</th><th class="num">Voice amount</th><th class="num">Total</th></tr></thead><tbody>
+{% for r in daily %}<tr><td>{{ r.key|date:"D j M" }}</td><td class="num">{{ r.sms|intcomma }}</td><td class="num">{{ r.sms_amount|money }}</td><td class="num">{{ r.calls|intcomma }}</td><td class="num">{{ r.minutes|floatformat:0 }}</td><td class="num">{{ r.voice_amount|money }}</td><td class="num">{{ r.total|money }}</td></tr>
+{% empty %}<tr><td colspan="7" class="muted">No traffic in this period.</td></tr>{% endfor %}
+</tbody></table>
+</div></body></html>

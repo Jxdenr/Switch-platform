@@ -16,6 +16,10 @@ urlpatterns = [
     path("logout/", auth_views.LogoutView.as_view(), name="logout"),
     # CRM
     path("accounts/", crm.account_list, name="account_list"),
+    path("suppliers/", crm.account_list, {"kind": "supplier"}, name="supplier_list"),
+    path("clients/", crm.account_list, {"kind": "client"}, name="client_list"),
+    path("accounts/<int:pk>/documents/<slug:kind>/<str:month>/", crm.document_view, name="document"),
+    path("accounts/<int:pk>/documents/send/", crm.document_send, name="document_send"),
     path("accounts/new/", crm.account_edit, name="account_new"),
     path("accounts/<int:pk>/", crm.account_detail, name="account_detail"),
     path("accounts/<int:pk>/edit/", crm.account_edit, name="account_edit"),
@@ -38,6 +42,7 @@ urlpatterns = [
     path("sms/blocking/", sms.block_rules, name="block_rules"),
     path("sms/<int:pk>/resend/", sms.resend, name="sms_resend"),
     path("ingest/jasmin/", sms.ingest_jasmin, name="ingest_jasmin"),
+    path("api/sms/inbound/", sms.api_inbound, name="api_inbound"),
     # Voice
     path("voice/cdrs/", voice.cdrs, name="cdrs"),
     path("voice/stats/", voice.stats, name="voice_stats"),

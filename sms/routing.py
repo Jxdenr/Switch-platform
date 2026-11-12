@@ -1,4 +1,4 @@
-"""Inbound SMS: record, route to the allocated client, and forward to their HTTP endpoint.
+"""Inbound SMS: record, route to the allocated client, and deliver it over HTTP or SMPP.
 
 Jasmin receives the SMS from the supplier (over the supplier's SMPP bind) and posts it to
 /ingest/jasmin/. `receive()` stores it and works out the client; `forward()` pushes it to
@@ -11,7 +11,7 @@ from django.conf import settings
 from django.db import transaction
 from django.utils import timezone
 
-from crm.models import SmppUser, Smsc
+from crm.models import HttpUser, SmppUser, Smsc
 from inventory.models import Allocation, Number
 from inventory.services import normalise
 from .models import BlockRule, Message
@@ -44,14 +44,17 @@ def _rates_for(allocation, number):
 
 @transaction.atomic
 def receive(*, source, destination, body, origin_connector="", smpp_username="", received_at=None,
-            source_ton=None, source_npi=None, dest_ton=None, dest_npi=None, registered_delivery=False):
+            source_ton=None, source_npi=None, dest_ton=None, dest_npi=None, registered_delivery=False,
+            http_user: HttpUser | None = None):
     dest = normalise(destination)
     msg = Message(received_at=received_at or timezone.now(), source=source[:32], destination=dest,
                   body=body, source_ton=source_ton, source_npi=source_npi, dest_ton=dest_ton,
                   dest_npi=dest_npi, registered_delivery=registered_delivery)
 
     # Which supplier bind did it arrive on?
-    if smpp_username:
+    if http_user:
+        msg.http_user, msg.supplier = http_user, http_user.account
+    elif smpp_username:
         msg.smpp_user = SmppUser.objects.filter(username=smpp_username).select_related("account").first()
         msg.supplier = msg.smpp_user.account if msg.smpp_user else None
     if not msg.supplier and origin_connector.startswith("smsc") and origin_connector[4:].isdigit():
@@ -71,7 +74,10 @@ def receive(*, source, destination, body, origin_connector="", smpp_username="",
             allocation = None  # voice-only numbers don't route SMS
         if allocation and not number.blocked:
             msg.client = allocation.client
+            # Deliver over HTTP if the client has an endpoint, otherwise over their SMPP bind.
             msg.http_endpoint = allocation.client.http_endpoints.filter(enabled=True).first()
+            if not msg.http_endpoint:
+                msg.client_bind = allocation.client.smpp_users.filter(enabled=True, role=SmppUser.CLIENT).first()
 
     rule = BlockRule.blocks(msg.source, dest, msg.client)
     if rule or (number and number.blocked):
@@ -82,9 +88,9 @@ def receive(*, source, destination, body, origin_connector="", smpp_username="",
         msg.status = Message.NO_ROUTE
         msg.last_error = "Number not found" if not number else "Number not allocated"
         msg.rate_out = 0
-    elif not msg.http_endpoint:
+    elif not msg.http_endpoint and not msg.client_bind:
         msg.status = Message.FAILED
-        msg.last_error = "Client has no enabled HTTP endpoint"
+        msg.last_error = "Client has no enabled HTTP endpoint or SMPP bind"
     msg.save()
     if number:
         number.billing_group.__class__.objects.filter(pk=number.billing_group_id).update(last_used=msg.received_at)

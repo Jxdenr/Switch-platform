@@ -198,3 +198,37 @@ def ingest_jasmin(request):
                     dest_ton=_int(p.get("dest_addr_ton")), dest_npi=_int(p.get("dest_addr_npi")))
     # Jasmin treats the exact body "ACK/Jasmin" as delivered.
     return HttpResponse("ACK/Jasmin")
+
+
+def _client_ip(request):
+    fwd = request.META.get("HTTP_X_FORWARDED_FOR", "")
+    return fwd.split(",")[0].strip() if fwd else request.META.get("REMOTE_ADDR", "")
+
+
+@csrf_exempt
+def api_inbound(request):
+    """A supplier's HTTP bind: they send SMS for our numbers here instead of over SMPP.
+
+    GET or POST /api/sms/inbound/ with key (or header X-Api-Key), to, from, message.
+    Also accepted: msisdn/destination for to, sender/source for from, text/content for message.
+    Answers JSON {"status": "ok", "id": "<uuid>"}.
+    """
+    from crm.models import HttpUser
+    p = request.POST if request.method == "POST" else request.GET
+    key = request.headers.get("X-Api-Key") or p.get("key", "")
+    user = HttpUser.objects.select_related("account").filter(api_key=key, enabled=True).first() if key else None
+    if not user:
+        return JsonResponse({"status": "error", "error": "invalid key"}, status=403)
+    if not user.allows(_client_ip(request)):
+        return JsonResponse({"status": "error", "error": "IP not allowed"}, status=403)
+
+    def first(*names):
+        return next((p[n] for n in names if p.get(n)), "")
+
+    to, frm, text = first("to", "msisdn", "destination"), first("from", "sender", "source"), first(
+        "message", "text", "content")
+    if not to or not text:
+        return JsonResponse({"status": "error", "error": "to and message are required"}, status=400)
+    msg = routing.receive(source=frm, destination=to, body=text, http_user=user)
+    type(user).objects.filter(pk=user.pk).update(last_used=msg.received_at)
+    return JsonResponse({"status": "ok", "id": str(msg.uuid), "routed": msg.client_id is not None})

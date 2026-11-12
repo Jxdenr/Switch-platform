@@ -14,8 +14,13 @@ class Message(models.Model):
     supplier = models.ForeignKey("crm.Account", null=True, on_delete=models.SET_NULL, related_name="+")
     smpp_user = models.ForeignKey("crm.SmppUser", null=True, blank=True, on_delete=models.SET_NULL)
     smsc = models.ForeignKey("crm.Smsc", null=True, blank=True, on_delete=models.SET_NULL)
+    http_user = models.ForeignKey("crm.HttpUser", null=True, blank=True, on_delete=models.SET_NULL,
+                                  help_text="Supplier sent it to us over HTTP")
     client = models.ForeignKey("crm.Account", null=True, blank=True, on_delete=models.SET_NULL, related_name="+")
     http_endpoint = models.ForeignKey("crm.HttpEndpoint", null=True, blank=True, on_delete=models.SET_NULL)
+    client_bind = models.ForeignKey("crm.SmppUser", null=True, blank=True, on_delete=models.SET_NULL,
+                                    related_name="delivered_messages",
+                                    help_text="Client receives it over SMPP on this bind")
     number = models.ForeignKey("inventory.Number", null=True, blank=True, on_delete=models.SET_NULL)
     billing_group = models.ForeignKey("inventory.BillingGroup", null=True, blank=True, on_delete=models.SET_NULL)
     source = models.CharField(max_length=32, db_index=True)
@@ -43,6 +48,16 @@ class Message(models.Model):
 
     def __str__(self):
         return f"{self.source} -> {self.destination}"
+
+    @property
+    def received_via(self):
+        if self.http_user_id:
+            return "HTTP"
+        return "SMPP" if (self.smpp_user_id or self.smsc_id) else ""
+
+    @property
+    def delivered_via(self):
+        return "HTTP" if self.http_endpoint_id else ("SMPP" if self.client_bind_id else "")
 
 
 class BlockRule(models.Model):

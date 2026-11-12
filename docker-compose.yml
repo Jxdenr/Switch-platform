@@ -25,6 +25,22 @@ services:
     depends_on: [db, web]
     restart: unless-stopped
 
+  smpp:
+    build: .
+    env_file: .env
+    command: python manage.py smpp_server
+    ports:
+      - "2775:2775"   # SMPP server: suppliers and clients bind here (firewall it to their IPs)
+    depends_on: [db, web]
+    restart: unless-stopped
+
+  statements:
+    build: .
+    env_file: .env
+    command: python manage.py send_statements --loop
+    depends_on: [db, web]
+    restart: unless-stopped
+
   bindstatus:
     build: .
     env_file: .env
@@ -46,11 +62,8 @@ services:
     environment:
       REDIS_CLIENT_HOST: redis
       AMQP_BROKER_HOST: rabbitmq
-      SWITCH_INGEST_URL: http://web:8000/ingest/jasmin/?token=${INGEST_TOKEN}
-    ports:
-      - "2775:2775"   # SMPP server: suppliers bind here (open in the firewall to supplier IPs only)
+    # Only used for binds where WE connect out to a supplier's SMSC. No ports are published.
     volumes:
-      - ./jasmin/mt_interceptor.py:/etc/jasmin/mt_interceptor.py:ro
       - jasminstore:/etc/jasmin/store
     restart: unless-stopped
 

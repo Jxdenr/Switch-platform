@@ -94,3 +94,23 @@ JASMIN_JCLI_PASSWORD = os.environ.get("JASMIN_JCLI_PASSWORD", "jclipwd")
 JASMIN_MO_CALLBACK_URL = os.environ.get("JASMIN_MO_CALLBACK_URL", "http://web:8000/ingest/jasmin/")
 FORWARD_MAX_ATTEMPTS = int(os.environ.get("FORWARD_MAX_ATTEMPTS", "5"))
 FORWARD_TIMEOUT = float(os.environ.get("FORWARD_TIMEOUT", "10"))
+
+# Statements and invoices. COMPANY_DETAILS appears on every document: address, VAT/company
+# number and the bank details suppliers should pay into (use \n for new lines in .env).
+COMPANY_NAME = os.environ.get("COMPANY_NAME", "Your Company Ltd")
+COMPANY_DETAILS = os.environ.get("COMPANY_DETAILS", "").replace("\\n", "\n")
+STATEMENT_SEND_DAY = int(os.environ.get("STATEMENT_SEND_DAY", "1"))
+
+# Email (statements). Without EMAIL_HOST, emails are printed to the log instead of sent.
+EMAIL_HOST = os.environ.get("EMAIL_HOST", "")
+EMAIL_PORT = int(os.environ.get("EMAIL_PORT", "587"))
+EMAIL_HOST_USER = os.environ.get("EMAIL_HOST_USER", "")
+EMAIL_HOST_PASSWORD = os.environ.get("EMAIL_HOST_PASSWORD", "")
+EMAIL_USE_TLS = os.environ.get("EMAIL_USE_TLS", "1") == "1"
+EMAIL_BACKEND = ("django.core.mail.backends.smtp.EmailBackend" if EMAIL_HOST
+                 else "django.core.mail.backends.console.EmailBackend")
+DEFAULT_FROM_EMAIL = os.environ.get("DEFAULT_FROM_EMAIL", "billing@example.com")
+
+# Built-in SMPP server: suppliers bind to send us SMS, clients bind to receive theirs.
+SMPP_SERVER_HOST = os.environ.get("SMPP_SERVER_HOST", "0.0.0.0")
+SMPP_SERVER_PORT = int(os.environ.get("SMPP_SERVER_PORT", "2775"))

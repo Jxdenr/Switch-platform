@@ -1,0 +1,12 @@
+{% load switch %}{% autoescape off %}Hello,
+
+Please find your {{ kind_label|lower }} {{ number }} for {{ first|date:"F Y" }} from {{ company_name }}.
+
+Inbound SMS: {{ t.sms }} messages, {{ t.sms_amount|money }} {{ currency }}
+{% if t.calls %}Inbound voice: {{ t.calls }} calls, {{ t.minutes|floatformat:0 }} minutes, {{ t.voice_amount|money }} {{ currency }}
+{% endif %}Total {% if kind == "invoice" %}due to us{% else %}payable to you{% endif %}: {{ t.total|money }} {{ currency }}
+
+A daily breakdown is attached as a CSV file.
+
+{{ company_name }}
+{{ company_details }}{% endautoescape %}

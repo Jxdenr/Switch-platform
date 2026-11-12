@@ -9,7 +9,7 @@ from django.core.management.base import BaseCommand
 from django.utils import timezone
 
 from core.models import Country, Currency, PaymentTerms, TimeOfDay
-from crm.models import Account, HttpEndpoint, SmppUser, Smsc
+from crm.models import Account, HttpEndpoint, HttpUser, SmppUser, Smsc
 from inventory import services
 from inventory.models import BillingGroup, BillingGroupRate, Number
 from sms.models import Message
@@ -32,12 +32,23 @@ class Command(BaseCommand):
             if i == 0:
                 Smsc.objects.get_or_create(account=s, title="Outbound to Example Wholesale",
                                            defaults={"ip": "203.0.113.10", "username": "switch", "password": "pw123"})
+            Account.objects.filter(pk=s.pk).update(billing_email=f"billing@{name.split()[0].lower()}.example.com",
+                                                   auto_statements=True)
+            if i == 2:
+                HttpUser.objects.get_or_create(account=s, title="HTTP API", defaults={"ip": "198.51.100.30"})
             suppliers.append(s)
         clients = []
         for name in ["Client Alpha", "Client Bravo", "Client Charlie"]:
-            c, _ = Account.objects.get_or_create(title=name, defaults={"is_client": True, "currency": gbp})
-            HttpEndpoint.objects.get_or_create(account=c, title="Inbound webhook",
-                                               defaults={"url": "https://example.com/sms-webhook"})
+            slug = name.split()[1].lower()
+            c, _ = Account.objects.get_or_create(title=name, defaults={
+                "is_client": True, "currency": gbp, "payment_terms": t3045,
+                "billing_email": f"accounts@{slug}.example.com", "auto_statements": name != "Client Bravo"})
+            if name == "Client Charlie":  # receives its SMS over SMPP instead of HTTP
+                SmppUser.objects.get_or_create(username="charlie", defaults={
+                    "account": c, "title": "Charlie SMPP receiver", "password": "demopw", "role": "client"})
+            else:
+                HttpEndpoint.objects.get_or_create(account=c, title="Inbound webhook",
+                                                   defaults={"url": "https://example.com/sms-webhook"})
             clients.append(c)
         start = 447700900000
         for gi, s in enumerate(suppliers):
@@ -54,6 +65,7 @@ class Command(BaseCommand):
             for ci, c in enumerate(clients):
                 services.allocate(group_nums[ci * 80:(ci + 1) * 80], c, t3045, via="system")
         self._calls(rnd)
+        self._documents()
         if Message.objects.exists():
             self.stdout.write("Messages already present, skipping.")
             return
@@ -70,6 +82,7 @@ class Command(BaseCommand):
             if m.status == Message.FAILED:
                 m.last_error = "HTTP 503: Service Unavailable"
             m.save()
+        self._documents()
         self.stdout.write(self.style.SUCCESS("Demo data ready."))
 
     def _calls(self, rnd):
@@ -94,3 +107,17 @@ class Command(BaseCommand):
                         end=start + timedelta(seconds=ring + billsec), duration=ring + billsec, billsec=billsec,
                         pdd_ms=rnd.randint(800, 3500), hangup_cause=cause, hangup_cause_q850=q850,
                         from_ip="198.51.100.20", mos_in=Decimal(str(round(rnd.uniform(3.6, 4.4), 2))) if billsec else None)
+
+    def _documents(self):
+        """Last month's invoices and statements, shown as already sent."""
+        from crm import statements as st
+        from crm.models import Document
+        if Document.objects.exists() or not Message.objects.exists():
+            return
+        first, _ = st.month_bounds(None)
+        for acc in Account.objects.exclude(billing_email=""):
+            for side in st.sides(acc):
+                doc = st.create_document(acc, st.kind_for(side), first)
+                if acc.auto_statements and doc.total:
+                    Document.objects.filter(pk=doc.pk).update(
+                        sent_at=timezone.now().replace(day=1, hour=6, minute=0), sent_to=acc.billing_email)

@@ -53,7 +53,10 @@ Open http://127.0.0.1:8000 and sign in. Run the tests with `python manage.py tes
 | SMS stats by supplier, client, bind, day | Done |
 | Client portal (clients see only their own numbers and SMS) | Done |
 | Colourways (Harbour, Graphite, Paper) and 3 navigation layouts | Done |
-| Jasmin sync and bind status (`sync_jasmin`) | Written, **needs testing against a live Jasmin and a test supplier bind** |
+| Built-in SMPP server (`smpp_server`): suppliers bind to send, clients bind to receive | Done, tested with a real SMPP client; **test with one real supplier and one real client before go-live** |
+| Supplier HTTP bind (`/api/sms/inbound/`), client HTTP delivery | Done, tested |
+| Statements tab, monthly invoices (suppliers) and statements (clients), auto email | Done, tested |
+| Jasmin sync for binds we make out to supplier SMSCs (`sync_jasmin`) | Written, **needs testing against a live Jasmin** |
 | REST API for clients | Next |
 | AI assistant | After v1 (see docs/platform-knowledge.md) |
 | Numbers for SMS, voice or both (uploaded once, allocated per channel) | Done, tested |
@@ -68,3 +71,22 @@ Point FreeSWITCH's `mod_json_cdr` at `https://<host>/ingest/freeswitch/?token=<I
 JSON or form-encoded `cdr=` both work). Each call is routed on the number's active **voice** allocation, billed with
 the billing group's increments (e.g. 60/60), minimum and maximum duration (the allocation's own min/max override the
 group's), and the per-minute voice rates are copied onto the call. Retries with the same call UUID are ignored.
+
+## Binds: sending and receiving
+
+| | SMPP | HTTP |
+|---|---|---|
+| Supplier sends SMS to us | Binds to our SMPP server (port 2775) with an SMPP user, role "Supplier sends", and uses submit_sm. Or we bind out to their SMSC (Jasmin). | Calls `/api/sms/inbound/` with their HTTP user's key and `to`, `from`, `message`. |
+| Client receives SMS from us | Binds to our SMPP server with an SMPP user, role "Client receives", and gets deliver_sm. | We POST/GET to their HTTP endpoint. |
+
+If a client has both, HTTP is used. Known v1 limits of the SMPP server: multi-part (UDH) messages are stored one
+record per part, and delivery receipts are not yet sent back to suppliers.
+
+## Statements and invoices
+
+Each account has a **Statement** tab: SMS and voice volumes and amounts for any date range, broken down by month, day,
+billing group, country or number, with CSV export. Suppliers get an **invoice** (what they owe us, from Due In);
+clients get a **statement** (what we owe them, from Due Out). Add a billing email and tick "Email monthly statement /
+invoice automatically" on the account, and `send_statements --loop` emails last month's document on
+`STATEMENT_SEND_DAY` (HTML in the email + a daily CSV). A sent document is frozen and never sent twice. Set
+`COMPANY_NAME`, `COMPANY_DETAILS` (address, VAT number, bank details) and the `EMAIL_*` settings first.

@@ -31,8 +31,9 @@ ICONS = {
 
 NAV = [
     ("Overview", [("dashboard", "Dashboard", "/", "home", False)]),
-    ("Accounts", [("accounts", "Suppliers & clients", "/accounts/", "acc", True),
-                  ("binds", "Bind status", "/binds/", "bind", True)]),
+    ("Customers", [("suppliers", "Suppliers", "/suppliers/", "acc", True),
+                   ("clients", "Clients", "/clients/", "acc", True),
+                   ("binds", "Bind status", "/binds/", "bind", True)]),
     ("Numbers", [("groups", "Billing groups", "/billing-groups/", "grp", True),
                  ("numbers", "Numbers", "/numbers/", "num", False),
                  ("addnumbers", "Add numbers", "/numbers/add/", "add", True)]),

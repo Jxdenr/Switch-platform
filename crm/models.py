@@ -19,6 +19,11 @@ class Account(models.Model):
     process_insights = models.BooleanField(default=True)
     active = models.BooleanField(default=True)
     notes = models.TextField(blank=True)
+    billing_email = models.CharField(
+        max_length=300, blank=True,
+        help_text="Where monthly statements and invoices go. Separate several addresses with commas.")
+    auto_statements = models.BooleanField(
+        default=False, help_text="Email last month's invoice (suppliers) or statement (clients) on the 1st.")
     created_at = models.DateTimeField(auto_now_add=True)
     last_access = models.DateTimeField(null=True, blank=True)
 
@@ -27,6 +32,18 @@ class Account(models.Model):
 
     def __str__(self):
         return self.title
+
+    @property
+    def list_url(self):
+        return "/suppliers/" if self.is_supplier or not self.is_client else "/clients/"
+
+    @property
+    def list_label(self):
+        return "Suppliers" if self.is_supplier or not self.is_client else "Clients"
+
+    @property
+    def nav_key(self):
+        return "suppliers" if self.is_supplier or not self.is_client else "clients"
 
     @property
     def kind(self):
@@ -80,9 +97,16 @@ class BankAccount(models.Model):
 
 
 class SmppUser(models.Model):
-    """'SMS User': the supplier binds TO US. We are the SMPP server."""
+    """Someone binds TO US over SMPP. We are the SMPP server.
+
+    A supplier binds to send us SMS for our numbers (submit_sm). A client binds to receive
+    the SMS for their allocated numbers (we send them deliver_sm)."""
+
+    SUPPLIER, CLIENT = "supplier", "client"
+    ROLES = [(SUPPLIER, "Supplier sends SMS to us"), (CLIENT, "Client receives SMS from us")]
 
     account = models.ForeignKey(Account, on_delete=models.CASCADE, related_name="smpp_users")
+    role = models.CharField(max_length=8, choices=ROLES, default=SUPPLIER)
     title = models.CharField(max_length=80)
     ip = models.CharField(max_length=200, blank=True, help_text="Allowed source IPs, comma separated. Blank = any.")
     username = models.CharField(max_length=16, unique=True, help_text="SMPP system_id the supplier binds with")
@@ -138,6 +162,34 @@ class Prefix(models.Model):
         return self.prefix
 
 
+def _new_key():
+    import secrets
+    return secrets.token_urlsafe(24)
+
+
+class HttpUser(models.Model):
+    """A supplier sends us SMS over HTTP instead of SMPP (the HTTP 'bind').
+
+    They call /api/sms/inbound/ with this key and to, from and message."""
+
+    account = models.ForeignKey(Account, on_delete=models.CASCADE, related_name="http_users")
+    title = models.CharField(max_length=80)
+    api_key = models.CharField(max_length=64, unique=True, default=_new_key)
+    ip = models.CharField(max_length=200, blank=True, help_text="Allowed source IPs, comma separated. Blank = any.")
+    enabled = models.BooleanField(default=True)
+    last_used = models.DateTimeField(null=True, blank=True, editable=False)
+
+    class Meta:
+        verbose_name = "HTTP user"
+
+    def __str__(self):
+        return self.title
+
+    def allows(self, ip):
+        allowed = [x.strip() for x in self.ip.split(",") if x.strip()]
+        return not allowed or ip in allowed
+
+
 class HttpEndpoint(models.Model):
     """'SMS HTTP': where we push inbound SMS for a client."""
 
@@ -188,3 +240,35 @@ class TerminationIp(models.Model):
 
     def __str__(self):
         return f"{self.title} {self.ip}"
+
+
+class Document(models.Model):
+    """A monthly invoice (to a supplier, for traffic they sent us) or statement (to a client,
+    for traffic we passed to them). Totals are frozen when the document is created."""
+
+    INVOICE, STATEMENT = "invoice", "statement"
+    KINDS = [(INVOICE, "Invoice"), (STATEMENT, "Statement")]
+
+    account = models.ForeignKey(Account, on_delete=models.PROTECT, related_name="documents")
+    kind = models.CharField(max_length=9, choices=KINDS)
+    number = models.CharField(max_length=30, unique=True)
+    period_start = models.DateField()
+    period_end = models.DateField()
+    currency = models.CharField(max_length=3, blank=True)
+    sms_count = models.PositiveIntegerField(default=0)
+    sms_amount = models.DecimalField(max_digits=14, decimal_places=5, default=0)
+    calls = models.PositiveIntegerField(default=0)
+    minutes = models.DecimalField(max_digits=14, decimal_places=2, default=0)
+    voice_amount = models.DecimalField(max_digits=14, decimal_places=5, default=0)
+    total = models.DecimalField(max_digits=14, decimal_places=2, default=0)
+    created_at = models.DateTimeField(auto_now_add=True)
+    sent_at = models.DateTimeField(null=True, blank=True)
+    sent_to = models.CharField(max_length=300, blank=True)
+    last_error = models.CharField(max_length=300, blank=True)
+
+    class Meta:
+        ordering = ["-period_start", "kind"]
+        unique_together = [("account", "kind", "period_start")]
+
+    def __str__(self):
+        return f"{self.get_kind_display()} {self.number}"

@@ -9,8 +9,13 @@ assistant's instructions, so keep it accurate whenever behaviour changes.
 - Clients receive the SMS for numbers allocated to them. You pay them a rate per SMS ("rate out", Due Out).
 - Margin = Due In − Due Out.
 
+## Customers
+- Suppliers and clients are listed separately (Customers → Suppliers / Clients). One account can be both.
+- Billing email (comma separated for several) and "Email monthly statement / invoice automatically" live on the account.
+
 ## Connections
-- **SMPP user**: a supplier binds to our SMPP server with this username and password. Optional IP whitelist.
+- **SMPP user**: someone binds to our SMPP server (port 2775) with this username and password. Optional IP whitelist. Role "Supplier sends SMS to us" (they submit_sm to our numbers) or "Client receives SMS from us" (we send them deliver_sm). A client SMPP user must bind as receiver or transceiver.
+- **HTTP user**: a supplier sends SMS to us over HTTP: `/api/sms/inbound/` with `key` (or header X-Api-Key), `to`, `from`, `message`. Optional IP whitelist.
 - **SMSC**: we bind out to a supplier's SMSC (host, port, username, password, TON settings, transceiver).
 - **HTTP endpoint**: where we push each inbound SMS for a client. Parameter names for to, from, message and uuid are configurable; GET or POST.
 - A bind is "down" when it is enabled but not currently connected. Status refreshes every minute.
@@ -41,6 +46,12 @@ assistant's instructions, so keep it accurate whenever behaviour changes.
 - Billable seconds use the group's increments: "60/60" charges the first 60 seconds in full, then each further 60. Unanswered calls bill 0. Minimum and maximum duration apply after (the allocation's own values override the group's).
 - Due in = rate in × billable minutes; due out = rate out × billable minutes. Rates are copied onto the call when it arrives.
 - Voice stats: calls, connected, ASR (connected ÷ calls), ACD (average answered seconds), billable minutes, due in, due out, margin.
+
+## Statements and invoices
+- Statement tab on each account: volumes and amounts for a date range, SMS and/or voice, broken down by month, day, billing group, country or number. Export CSV.
+- Supplier side = traffic they sent to our numbers, priced at rate in (they pay us) -> Invoice (INV-YYYYMM-account id).
+- Client side = traffic we passed to them, priced at rate out (we pay them) -> Statement (ST-YYYYMM-account id).
+- Monthly documents are created and emailed on the send day for accounts with auto sending on. A sent document never changes and is never sent twice automatically; "Email now" resends on request. Accounts with no traffic that month get nothing.
 
 ## Blocking rules
 - Rules match a destination number, a destination prefix, or a sender ID (case-insensitive). A rule applies to everyone or to one account.

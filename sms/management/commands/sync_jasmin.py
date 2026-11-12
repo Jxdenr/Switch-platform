@@ -4,8 +4,8 @@ What it configures:
   * HTTP connector `switchapp` -> our /ingest/jasmin/ endpoint.
   * Each SMSC (we bind to the supplier) -> smppccm connector `smsc<id>`, started if enabled.
     Inbound SMS (deliver_sm) from those binds reach us via a default MO route to `switchapp`.
-  * Each SMPP user (supplier binds to us) -> Jasmin user in group `suppliers`. Their
-    submit_sm traffic is handed to us by the MT interceptor in jasmin/mt_interceptor.py.
+  * Binds TO us (SMPP users, suppliers and clients) are NOT in Jasmin: they connect to the
+    app's own SMPP server (`manage.py smpp_server`), which keeps their bind status itself.
 
 Run `manage.py sync_jasmin --status` on a schedule (every minute) to refresh bind status.
 NOTE: verify against your Jasmin version on a test bind before relying on it in production.
@@ -14,7 +14,7 @@ from django.conf import settings
 from django.core.management.base import BaseCommand
 from django.utils import timezone
 
-from crm.models import SmppUser, Smsc
+from crm.models import Smsc
 from sms.jcli import JCli
 
 
@@ -45,9 +45,6 @@ class Command(BaseCommand):
         for s in Smsc.objects.all():
             lines.append(f"smppccm -a / cid {s.connector_id} / host {s.ip} / port {s.port} / username {s.username} "
                          f"/ password *** / bind {'transceiver' if s.transceiver else 'receiver'}")
-        lines.append("group -a / gid suppliers")
-        for u in SmppUser.objects.all():
-            lines.append(f"user -a / uid {u.username} / username {u.username} / password *** / gid suppliers")
         return lines
 
     def ingest_url(self):
@@ -73,16 +70,6 @@ class Command(BaseCommand):
             else:
                 j.block("smppccm -a", {"cid": s.connector_id, **fields})
             j.run(f"smppccm -{'1' if s.enabled else '0'} {s.connector_id}")
-        if "suppliers" not in j.run("group -l"):
-            j.block("group -a", {"gid": "suppliers"})
-        users = j.run("user -l")
-        for u in SmppUser.objects.all():
-            if u.username in users:
-                j.block(f"user -u {u.username}", {"password": u.password})
-            else:
-                j.block("user -a", {"uid": u.username, "username": u.username, "password": u.password,
-                                    "gid": "suppliers"})
-            j.run(f"user -{'e' if u.enabled else 'd'} {u.username}")
         j.run("persist")
         self.stdout.write(self.style.SUCCESS("Jasmin configuration synced."))
 
@@ -92,8 +79,4 @@ class Command(BaseCommand):
         for s in Smsc.objects.all():
             line = next((ln for ln in listing.splitlines() if s.connector_id in ln), "")
             Smsc.objects.filter(pk=s.pk).update(bound="BOUND" in line.upper(), last_status_at=now)
-        bound = j.run("stats --smppsapi")
-        for u in SmppUser.objects.all():
-            Smpp = SmppUser.objects.filter(pk=u.pk)
-            Smpp.update(bound=u.username in bound, last_status_at=now)
         self.stdout.write("Bind status refreshed.")
