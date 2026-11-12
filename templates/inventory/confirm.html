@@ -7,6 +7,7 @@
 <form method="post" action="/numbers/bulk/" class="card stack">{% csrf_token %}
 {% for k, v in carry %}<input type="hidden" name="{{ k }}" value="{{ v }}">{% endfor %}
 <input type="hidden" name="action" value="{{ action }}"><input type="hidden" name="confirm" value="1"><input type="hidden" name="back" value="{{ back }}">
+{% if action == "unallocate" %}<div class="field"><label for="use_for">Unallocate</label><select name="use_for" id="use_for">{% for v, l in channel_choices %}<option value="{{ v }}">{% if v == "both" %}SMS and voice{% else %}{{ l }}{% endif %}</option>{% endfor %}</select></div>{% endif %}
 {% if action == "move" %}<div class="field"><label for="target_group">Move to billing group</label><select name="target_group" id="target_group" required>{% for g in groups %}<option value="{{ g.pk }}">{{ g.title }} · {{ g.supplier }}</option>{% endfor %}</select></div>{% endif %}
 <p class="mono" style="margin:0;white-space:normal">{% for n in numbers %}{{ n.number|e164 }}{% if not forloop.last %}, {% endif %}{% endfor %}{% if count > 20 %} … and {{ count|add:-20|intcomma }} more{% endif %}</p>
 <div><button class="btn primary{% if action == 'delete' %} danger{% endif %}">Yes, {{ action }} {{ count|intcomma }}</button> <a class="btn" href="{{ back }}">Cancel</a></div>

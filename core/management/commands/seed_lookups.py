@@ -35,4 +35,5 @@ class Command(BaseCommand):
         NumberType.objects.get_or_create(title="Default")
         for name, iso, dial, cont in COUNTRIES:
             Country.objects.get_or_create(name=name, defaults={"iso2": iso, "dial_code": dial, "continent": cont})
-        self.stdout.write(self.style.SUCCESS("Lookups ready."))
+        if opts.get("verbosity", 1):
+            self.stdout.write(self.style.SUCCESS("Lookups ready."))

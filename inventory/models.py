@@ -10,15 +10,19 @@ Flow, same as the original platform:
 from django.db import models
 from django.utils import timezone
 
+SMS, VOICE = "sms", "voice"
+CHANNELS = [(SMS, "SMS"), (VOICE, "Voice")]
+
 
 class BillingGroup(models.Model):
-    VOICE, SMS = "voice", "sms"
-    ROUTING_TYPES = [(VOICE, "Voice"), (SMS, "SMS")]
+    VOICE, SMS, BOTH = "voice", "sms", "both"
+    ROUTING_TYPES = [(SMS, "SMS"), (VOICE, "Voice"), (BOTH, "SMS & voice")]
 
     supplier = models.ForeignKey("crm.Account", on_delete=models.PROTECT, related_name="billing_groups",
                                  limit_choices_to={"is_supplier": True})
     title = models.CharField(max_length=120)
-    routing_type = models.CharField(max_length=5, choices=ROUTING_TYPES, default=SMS)
+    routing_type = models.CharField(max_length=5, choices=ROUTING_TYPES, default=SMS,
+                                    help_text="Numbers in this group can be used for SMS, voice, or both.")
     number_type = models.ForeignKey("core.NumberType", null=True, blank=True, on_delete=models.PROTECT)
     country = models.ForeignKey("core.Country", on_delete=models.PROTECT)
     network = models.CharField(max_length=60, blank=True)
@@ -46,6 +50,10 @@ class BillingGroup(models.Model):
     def __str__(self):
         return f"{self.title} ({self.supplier})"
 
+    @property
+    def channels(self):
+        return [SMS, VOICE] if self.routing_type == self.BOTH else [self.routing_type]
+
     def counts(self):
         total = self.numbers.count()
         allocated = self.numbers.filter(allocations__ends_at__isnull=True).distinct().count()
@@ -53,9 +61,10 @@ class BillingGroup(models.Model):
 
 
 class BillingGroupRate(models.Model):
-    """One row per payment-terms slot (1-3) and time-of-day band."""
+    """One row per channel, payment-terms slot (1-3) and time-of-day band."""
 
     billing_group = models.ForeignKey(BillingGroup, on_delete=models.CASCADE, related_name="rates")
+    channel = models.CharField(max_length=5, choices=CHANNELS, default=SMS)
     slot = models.PositiveSmallIntegerField(default=1, choices=[(1, "Terms 1"), (2, "Terms 2"), (3, "Terms 3")])
     payment_terms = models.ForeignKey("core.PaymentTerms", on_delete=models.PROTECT)
     time_of_day = models.ForeignKey("core.TimeOfDay", null=True, blank=True, on_delete=models.PROTECT)
@@ -65,8 +74,8 @@ class BillingGroupRate(models.Model):
                                    help_text="Default payout to the client")
 
     class Meta:
-        ordering = ["slot"]
-        unique_together = [("billing_group", "slot", "time_of_day")]
+        ordering = ["channel", "slot"]
+        unique_together = [("billing_group", "channel", "slot", "time_of_day")]
 
 
 class Number(models.Model):
@@ -85,11 +94,18 @@ class Number(models.Model):
     def current_allocation(self):
         return self.allocations.filter(ends_at__isnull=True).select_related("client", "payment_terms").first()
 
+    def active_allocation(self, channel):
+        return (self.allocations.filter(ends_at__isnull=True, channel=channel)
+                .select_related("client", "payment_terms").first())
+
 
 class Allocation(models.Model):
-    """A number given to a client. History is kept: unallocating sets ends_at."""
+    """A number given to a client for one channel. History is kept: unallocating sets ends_at.
+    A number in an "SMS & voice" group can have one active SMS allocation and one active voice
+    allocation (normally to the same client)."""
 
     number = models.ForeignKey(Number, on_delete=models.CASCADE, related_name="allocations")
+    channel = models.CharField(max_length=5, choices=CHANNELS, default=SMS)
     client = models.ForeignKey("crm.Account", on_delete=models.PROTECT, related_name="allocations",
                                limit_choices_to={"is_client": True})
     payment_terms = models.ForeignKey("core.PaymentTerms", null=True, blank=True, on_delete=models.PROTECT)
@@ -103,12 +119,12 @@ class Allocation(models.Model):
     class Meta:
         ordering = ["-starts_at"]
         constraints = [
-            models.UniqueConstraint(fields=["number"], condition=models.Q(ends_at__isnull=True),
-                                    name="one_active_allocation_per_number"),
+            models.UniqueConstraint(fields=["number", "channel"], condition=models.Q(ends_at__isnull=True),
+                                    name="one_active_allocation_per_number_channel"),
         ]
 
     def __str__(self):
-        return f"{self.number} -> {self.client}"
+        return f"{self.number} -> {self.client} ({self.channel})"
 
 
 class AllocationRate(models.Model):

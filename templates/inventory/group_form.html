@@ -11,10 +11,10 @@
 </div><div class="fieldrow" style="margin-top:12px">{% for field in form %}{% if field.name == "blocked" or field.name == "active" %}<div class="field check"><label for="{{ field.id_for_label }}">{{ field.label }}</label>{{ field }}</div>{% endif %}{% endfor %}</div>
 <div class="field" style="margin-top:12px"><label for="{{ form.note.id_for_label }}">Note</label>{{ form.note }}</div></section>
 
-<section class="card"><h2>Rates</h2><p class="muted" style="margin-top:0">Up to three payment terms. Rate in is what the supplier pays per SMS (or minute); rate out is the default client payout used when allocating.</p>
+<section class="card"><h2>Rates</h2><p class="muted" style="margin-top:0">Add a row per channel (SMS, voice) for each payment terms, up to three terms. Rate in is what the supplier pays per SMS (or minute); rate out is the default client payout used when allocating.</p>
 {{ rates.management_form }}{% if rates.non_form_errors %}<ul class="errorlist">{% for e in rates.non_form_errors %}<li>{{ e }}</li>{% endfor %}</ul>{% endif %}
-<div class="tablewrap"><table><thead><tr><th>Slot</th><th>Payment terms</th><th>Time of day</th><th>Rate in</th><th>Rate out</th><th>Remove</th></tr></thead><tbody>
-{% for rf in rates %}<tr>{% for h in rf.hidden_fields %}{{ h }}{% endfor %}<td>{{ rf.slot }}</td><td>{{ rf.payment_terms }}{{ rf.payment_terms.errors }}</td><td>{{ rf.time_of_day }}</td><td>{{ rf.rate_in }}</td><td>{{ rf.rate_out }}</td><td>{% if rf.instance.pk %}{{ rf.DELETE }}{% endif %}</td></tr>{% endfor %}
+<div class="tablewrap"><table><thead><tr><th>Channel</th><th>Slot</th><th>Payment terms</th><th>Time of day</th><th>Rate in</th><th>Rate out</th><th>Remove</th></tr></thead><tbody>
+{% for rf in rates %}<tr>{% for h in rf.hidden_fields %}{{ h }}{% endfor %}<td>{{ rf.channel }}</td><td>{{ rf.slot }}</td><td>{{ rf.payment_terms }}{{ rf.payment_terms.errors }}</td><td>{{ rf.time_of_day }}</td><td>{{ rf.rate_in }}</td><td>{{ rf.rate_out }}</td><td>{% if rf.instance.pk %}{{ rf.DELETE }}{% endif %}</td></tr>{% endfor %}
 </tbody></table></div></section>
 
 <details class="card"><summary><b>Voice settings</b> <span class="muted">(only used for voice ranges)</span></summary><div class="fieldrow" style="margin-top:12px">

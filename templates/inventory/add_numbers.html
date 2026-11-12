@@ -2,7 +2,7 @@
 {% block title %}Add numbers{% endblock %}
 {% block content %}
 <div class="crumbs"><a href="/numbers/">Numbers</a> / Add</div>
-<div class="pagehead"><div><h1>Add numbers</h1><div class="sub">Numbers go into a billing group, which sets the supplier, country and rates.</div></div></div>
+<div class="pagehead"><div><h1>Add numbers</h1><div class="sub">Numbers go into a billing group, which sets the supplier, country, rates, and whether they're for SMS, voice or both. Upload once; a "SMS &amp; voice" group covers both.</div></div></div>
 <form method="post" enctype="multipart/form-data" class="card stack">{% csrf_token %}
 {% if form.non_field_errors %}<ul class="errorlist">{% for e in form.non_field_errors %}<li>{{ e }}</li>{% endfor %}</ul>{% endif %}
 <div class="field"><label for="{{ form.billing_group.id_for_label }}">Billing group</label>{{ form.billing_group }}{% for e in form.billing_group.errors %}<span class="err">{{ e }}</span>{% endfor %}

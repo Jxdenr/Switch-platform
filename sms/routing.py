@@ -22,7 +22,7 @@ logger = logging.getLogger(__name__)
 def _rates_for(allocation, number):
     """Pick the rate row: allocation terms if set, else the first slot."""
     group = number.billing_group
-    group_rates = list(group.rates.select_related("payment_terms"))
+    group_rates = list(group.rates.filter(channel="sms").select_related("payment_terms"))
     alloc_rates = list(allocation.rates.select_related("payment_terms")) if allocation else []
     terms = allocation.payment_terms if allocation else None
 
@@ -64,9 +64,11 @@ def receive(*, source, destination, body, origin_connector="", smpp_username="",
         msg.billing_group = number.billing_group
         msg.supplier = msg.supplier or number.billing_group.supplier
         msg.currency = number.billing_group.currency.code
-        allocation = (Allocation.objects.filter(number=number, ends_at__isnull=True)
+        allocation = (Allocation.objects.filter(number=number, channel="sms", ends_at__isnull=True)
                       .select_related("client", "payment_terms").first())
         msg.rate_in, msg.rate_out, msg.payment_terms = _rates_for(allocation, number)
+        if number.billing_group.routing_type == "voice":
+            allocation = None  # voice-only numbers don't route SMS
         if allocation and not number.blocked:
             msg.client = allocation.client
             msg.http_endpoint = allocation.client.http_endpoints.filter(enabled=True).first()

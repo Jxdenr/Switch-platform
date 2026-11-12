@@ -26,8 +26,8 @@ class BillingGroupForm(forms.ModelForm):
 
 
 RateFormSet = forms.inlineformset_factory(
-    BillingGroup, BillingGroupRate, fields=["slot", "payment_terms", "time_of_day", "rate_in", "rate_out"],
-    extra=3, max_num=9, can_delete=True)
+    BillingGroup, BillingGroupRate, fields=["channel", "slot", "payment_terms", "time_of_day", "rate_in", "rate_out"],
+    extra=3, max_num=12, can_delete=True)
 
 
 def _group_qs():
@@ -155,6 +155,10 @@ def _numbers_qs(request):
         qs = qs.filter(is_alloc=True)
     elif status == "blocked":
         qs = qs.filter(blocked=True)
+    if f.get("routing") == "sms":
+        qs = qs.filter(billing_group__routing_type__in=["sms", "both"])
+    elif f.get("routing") == "voice":
+        qs = qs.filter(billing_group__routing_type__in=["voice", "both"])
     if f.get("q"):
         qs = qs.filter(number__contains=services.normalise(f["q"]))
     return qs.distinct()
@@ -167,13 +171,13 @@ def number_list(request):
     if request.GET.get("export") == "csv":
         return _export_numbers(qs)
     page = Paginator(qs, int(request.GET.get("per", 50))).get_page(request.GET.get("page"))
-    rows = []
-    allocs = {a.number_id: a for a in Allocation.objects.filter(number__in=page.object_list, ends_at__isnull=True)
-              .select_related("client", "payment_terms")}
-    for n in page.object_list:
-        rows.append((n, allocs.get(n.pk)))
+    allocs = {}
+    for a in (Allocation.objects.filter(number__in=page.object_list, ends_at__isnull=True)
+              .select_related("client", "payment_terms").order_by("channel")):
+        allocs.setdefault(a.number_id, []).append(a)
+    rows = [(n, allocs.get(n.pk, [])) for n in page.object_list]
     stats = Number.objects.aggregate(total=Count("pk"), blocked=Count("pk", filter=Q(blocked=True)))
-    stats["allocated"] = Allocation.objects.filter(ends_at__isnull=True).count()
+    stats["allocated"] = Allocation.objects.filter(ends_at__isnull=True).values("number").distinct().count()
     stats["free"] = stats["total"] - stats["allocated"] - stats["blocked"]
     return render(request, "inventory/number_list.html", {
         "page": page, "rows": rows, "f": request.GET, "nav": "numbers", "stats": stats,
@@ -189,20 +193,33 @@ def _export_numbers(qs):
     resp = HttpResponse(content_type="text/csv")
     resp["Content-Disposition"] = 'attachment; filename="numbers.csv"'
     w = csv.writer(resp)
-    w.writerow(["number", "country", "supplier", "billing_group", "routing_type", "status", "client",
-                "terms", "date_allocated"])
-    allocs = {a.number_id: a for a in Allocation.objects.filter(ends_at__isnull=True).select_related("client", "payment_terms")}
+    w.writerow(["number", "country", "supplier", "billing_group", "usable_for", "status",
+                "sms_client", "voice_client", "terms", "date_allocated"])
+    allocs = {}
+    for a in Allocation.objects.filter(ends_at__isnull=True).select_related("client", "payment_terms"):
+        allocs.setdefault(a.number_id, {})[a.channel] = a
     for n in qs.iterator(chunk_size=2000):
-        a = allocs.get(n.pk)
+        a = allocs.get(n.pk, {})
+        first = a.get("sms") or a.get("voice")
         w.writerow([n.number, n.billing_group.country, n.billing_group.supplier, n.billing_group.title,
-                    n.billing_group.routing_type, "blocked" if n.blocked else ("allocated" if a else "free"),
-                    a.client if a else "", a.payment_terms if a else "",
-                    a.starts_at.date() if a else ""])
+                    n.billing_group.get_routing_type_display(),
+                    "blocked" if n.blocked else ("allocated" if a else "free"),
+                    a["sms"].client if "sms" in a else "", a["voice"].client if "voice" in a else "",
+                    first.payment_terms or "" if first else "", first.starts_at.date() if first else ""])
     return resp
+
+
+CHANNEL_CHOICES = [("both", "SMS & voice (whatever each number supports)"), ("sms", "SMS only"),
+                   ("voice", "Voice only")]
+
+
+def _channels(value):
+    return None if value in ("", "both", None) else [value]
 
 
 class AllocateForm(forms.Form):
     client = forms.ModelChoiceField(Account.objects.filter(is_client=True))
+    use_for = forms.ChoiceField(choices=CHANNEL_CHOICES, initial="both", label="Use for")
     payment_terms = forms.ModelChoiceField(PaymentTerms.objects.all(), required=False)
     all_terms = forms.BooleanField(required=False)
     rate_out = forms.DecimalField(required=False, max_digits=10, decimal_places=5,
@@ -228,7 +245,7 @@ def bulk_action(request):
     back = request.POST.get("back") or "/numbers/"
     if select_all:
         request.GET = request.GET.copy()
-        for k in ("group", "supplier", "country", "client", "status", "q"):
+        for k in ("group", "supplier", "country", "client", "status", "routing", "q"):
             if request.POST.get("f_" + k):
                 request.GET[k] = request.POST["f_" + k]
         numbers = list(_numbers_qs(request))
@@ -247,7 +264,7 @@ def bulk_action(request):
                 rates = [dict(slot=1, payment_terms=d["payment_terms"], time_of_day=d["time_of_day"],
                               rate_out=d["rate_out"])]
             created, moved = services.allocate(numbers, d["client"], d["payment_terms"], d["all_terms"], rates,
-                                               d["service"], user=request.user)
+                                               d["service"], channels=_channels(d["use_for"]), user=request.user)
             msg = f"Allocated {created:,} numbers to {d['client']}."
             if moved:
                 msg += f" {moved:,} were moved from another client."
@@ -261,10 +278,11 @@ def bulk_action(request):
     if action in ("unallocate", "block", "unblock", "delete", "move") and not request.POST.get("confirm"):
         return render(request, "inventory/confirm.html", {
             "action": action, "count": len(numbers), "numbers": numbers[:20], "carry": _carry(request),
-            "back": back, "nav": "numbers", "groups": BillingGroup.objects.select_related("supplier")})
+            "back": back, "nav": "numbers", "groups": BillingGroup.objects.select_related("supplier"),
+            "channel_choices": CHANNEL_CHOICES})
 
     if action == "unallocate":
-        n = services.unallocate(numbers, user=request.user)
+        n = services.unallocate(numbers, channels=_channels(request.POST.get("use_for")), user=request.user)
         messages.success(request, f"Unallocated {n:,} numbers.")
     elif action in ("block", "unblock"):
         n = services.set_blocked(numbers, action == "block", user=request.user)

@@ -10,7 +10,7 @@ from django.db import transaction
 from django.utils import timezone
 
 from core.models import log
-from .models import Allocation, AllocationRate, BillingGroup, Number
+from .models import SMS, VOICE, Allocation, AllocationRate, BillingGroup, Number
 
 DIGITS = re.compile(r"\D+")
 
@@ -77,33 +77,40 @@ def add_numbers(group: BillingGroup, numbers: list[str], user=None, via="ui") ->
 
 @transaction.atomic
 def allocate(numbers, client, payment_terms=None, all_terms=False, rates=None, service="",
-             min_duration=None, max_duration=None, user=None, via="ui"):
-    """Allocate numbers to a client. Numbers that are already allocated are moved:
-    the old allocation is ended and a new one starts now.
+             min_duration=None, max_duration=None, channels=None, user=None, via="ui"):
+    """Allocate numbers to a client for one or more channels ("sms", "voice").
 
-    rates: list of dicts {slot, payment_terms, time_of_day, rate_out}. If empty the
-    billing group's default rate_out for the chosen terms is used.
+    channels: which channels to allocate; default = every channel the number's billing group
+    supports. A channel the group doesn't support is skipped for that number.
+    Numbers already allocated on a channel are moved: the old allocation ends now.
+    rates: list of dicts {slot, payment_terms, time_of_day, rate_out}, applied to every channel.
+    If empty, the billing group's default rate_out for that channel and terms is used.
+    Returns (numbers allocated, allocations moved from another client or channel holder).
     """
     now = timezone.now()
     numbers = list(numbers)
-    ids = [n.pk for n in numbers]
-    moved = Allocation.objects.filter(number_id__in=ids, ends_at__isnull=True).update(ends_at=now)
-    created = 0
+    created = moved = 0
     for num in numbers:
         if num.blocked:
             continue
-        a = Allocation.objects.create(number=num, client=client, payment_terms=payment_terms,
-                                      all_terms=all_terms, service=service, starts_at=now,
-                                      min_duration=min_duration, max_duration=max_duration)
-        chosen = rates or _default_rates(num.billing_group, payment_terms, all_terms)
-        AllocationRate.objects.bulk_create([AllocationRate(allocation=a, **r) for r in chosen])
+        chans = [c for c in (channels or num.billing_group.channels) if c in num.billing_group.channels]
+        if not chans:
+            continue
+        moved += Allocation.objects.filter(number=num, channel__in=chans, ends_at__isnull=True).update(ends_at=now)
+        for ch in chans:
+            a = Allocation.objects.create(number=num, client=client, channel=ch, payment_terms=payment_terms,
+                                          all_terms=all_terms, service=service if ch == VOICE else "",
+                                          starts_at=now, min_duration=min_duration, max_duration=max_duration)
+            chosen = rates or _default_rates(num.billing_group, payment_terms, all_terms, ch)
+            AllocationRate.objects.bulk_create([AllocationRate(allocation=a, **r) for r in chosen])
         created += 1
-    log(user, "numbers.allocate", client, via=via, allocated=created, moved_from_other_client=moved)
+    log(user, "numbers.allocate", client, via=via, allocated=created, channels=channels or "group default",
+        moved=moved)
     return created, moved
 
 
-def _default_rates(group, payment_terms, all_terms):
-    qs = group.rates.all()
+def _default_rates(group, payment_terms, all_terms, channel=SMS):
+    qs = group.rates.filter(channel=channel)
     if payment_terms and not all_terms:
         qs = qs.filter(payment_terms=payment_terms)
     return [dict(slot=r.slot, payment_terms=r.payment_terms, time_of_day=r.time_of_day, rate_out=r.rate_out)
@@ -111,10 +118,15 @@ def _default_rates(group, payment_terms, all_terms):
 
 
 @transaction.atomic
-def unallocate(numbers, user=None, via="ui"):
+def unallocate(numbers, channels=None, user=None, via="ui"):
+    """End active allocations. channels=None ends both SMS and voice."""
     ids = [n.pk for n in numbers]
-    count = Allocation.objects.filter(number_id__in=ids, ends_at__isnull=True).update(ends_at=timezone.now())
-    log(user, "numbers.unallocate", f"{count} numbers", via=via, count=count)
+    qs = Allocation.objects.filter(number_id__in=ids, ends_at__isnull=True)
+    if channels:
+        qs = qs.filter(channel__in=channels)
+    count = qs.values("number").distinct().count()
+    qs.update(ends_at=timezone.now())
+    log(user, "numbers.unallocate", f"{count} numbers", via=via, count=count, channels=channels or "all")
     return count
 
 

@@ -48,7 +48,8 @@ class FlowTests(TestCase):
         self.assertContains(r, "Allocate 2 numbers")  # confirm step, nothing changed yet
         self.assertFalse(Allocation.objects.exists())
         self.client.post("/numbers/bulk/", {"action": "allocate", "confirm": "1", "ids": ids,
-                                            "client": self.cust.pk, "payment_terms": self.terms.pk})
+                                            "client": self.cust.pk, "payment_terms": self.terms.pk,
+                                            "use_for": "both"})
         self.assertEqual(Allocation.objects.filter(ends_at__isnull=True).count(), 2)
 
         r = self.client.post("/ingest/jasmin/?token=t0k&smpp_user=supbind",
@@ -104,3 +105,47 @@ class FlowTests(TestCase):
         self.assertNotContains(r, "+447700900101")
         self.assertEqual(self.client.get("/accounts/").status_code, 403)
         self.assertEqual(self.client.post("/numbers/bulk/", {"action": "unallocate"}).status_code, 403)
+
+
+class ChannelTests(TestCase):
+    """Numbers in an 'SMS & voice' group are uploaded once and can be allocated per channel."""
+
+    def setUp(self):
+        call_command("seed_lookups", verbosity=0)
+        self.terms = PaymentTerms.objects.get(title="30/45")
+        sup = Account.objects.create(title="Sup", is_supplier=True)
+        self.a = Account.objects.create(title="A", is_client=True)
+        self.b = Account.objects.create(title="B", is_client=True)
+        uk, gbp = Country.objects.get(name="United Kingdom"), Currency.objects.get(code="GBP")
+        self.both = BillingGroup.objects.create(supplier=sup, title="Both", country=uk, currency=gbp, routing_type="both")
+        self.sms_only = BillingGroup.objects.create(supplier=sup, title="SMS", country=uk, currency=gbp, routing_type="sms")
+        for g in (self.both, self.sms_only):
+            BillingGroupRate.objects.create(billing_group=g, channel="sms", slot=1, payment_terms=self.terms,
+                                            rate_in=Decimal("0.02"), rate_out=Decimal("0.01"))
+        BillingGroupRate.objects.create(billing_group=self.both, channel="voice", slot=1, payment_terms=self.terms,
+                                        rate_in=Decimal("0.05"), rate_out=Decimal("0.03"))
+        services.add_numbers(self.both, ["447700900100"])
+        services.add_numbers(self.sms_only, ["447700900200"])
+
+    def test_default_allocates_every_supported_channel(self):
+        services.allocate(Number.objects.all(), self.a, self.terms)
+        both = Number.objects.get(number="447700900100")
+        self.assertEqual(sorted(both.allocations.values_list("channel", flat=True)), ["sms", "voice"])
+        self.assertEqual(both.active_allocation("voice").rates.get().rate_out, Decimal("0.03"))
+        sms = Number.objects.get(number="447700900200")
+        self.assertEqual(list(sms.allocations.values_list("channel", flat=True)), ["sms"])
+
+    def test_split_channels_and_partial_unallocate(self):
+        n = Number.objects.filter(number="447700900100")
+        services.allocate(n, self.a, self.terms, channels=["sms"])
+        services.allocate(n, self.b, self.terms, channels=["voice"])
+        num = n.get()
+        self.assertEqual((num.active_allocation("sms").client, num.active_allocation("voice").client), (self.a, self.b))
+        services.unallocate(n, channels=["voice"])
+        self.assertIsNone(num.active_allocation("voice"))
+        self.assertEqual(num.active_allocation("sms").client, self.a)
+
+    def test_voice_request_skips_sms_only_numbers(self):
+        created, _ = services.allocate(Number.objects.filter(number="447700900200"), self.a, self.terms,
+                                       channels=["voice"])
+        self.assertEqual(created, 0)

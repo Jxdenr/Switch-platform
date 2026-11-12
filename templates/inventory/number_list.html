@@ -10,13 +10,14 @@
   <label>Client<select name="client" id="n-client"><option value="">Any</option>{% for c in clients %}<option value="{{ c.pk }}" {% if f.client == c.pk|stringformat:"s" %}selected{% endif %}>{{ c }}</option>{% endfor %}</select></label>
   <label>Status<select name="status" id="n-status"><option value="">Any</option>
     <option value="free" {% if f.status == "free" %}selected{% endif %}>Free</option><option value="allocated" {% if f.status == "allocated" %}selected{% endif %}>Allocated</option><option value="blocked" {% if f.status == "blocked" %}selected{% endif %}>Blocked</option></select></label>{% endif %}
+  <label>Usable for<select name="routing" id="n-routing"><option value="">Any</option><option value="sms" {% if f.routing == "sms" %}selected{% endif %}>SMS</option><option value="voice" {% if f.routing == "voice" %}selected{% endif %}>Voice</option></select></label>
   <label>Country<select name="country" id="n-country"><option value="">Any</option>{% for c in countries %}<option value="{{ c.pk }}" {% if f.country == c.pk|stringformat:"s" %}selected{% endif %}>{{ c }}</option>{% endfor %}</select></label>
   <label>Number contains<input type="text" name="q" id="n-q" value="{{ f.q|default:'' }}"></label>
   <button class="btn">Filter</button> <a class="btn" href="/numbers/">Clear</a>
 </form>
 <form method="post" action="/numbers/bulk/" id="nform">{% csrf_token %}
 <input type="hidden" name="back" value="{{ request.get_full_path }}">
-<input type="hidden" name="f_group" value="{{ f.group|default:'' }}"><input type="hidden" name="f_supplier" value="{{ f.supplier|default:'' }}"><input type="hidden" name="f_country" value="{{ f.country|default:'' }}"><input type="hidden" name="f_client" value="{{ f.client|default:'' }}"><input type="hidden" name="f_status" value="{{ f.status|default:'' }}"><input type="hidden" name="f_q" value="{{ f.q|default:'' }}">
+<input type="hidden" name="f_group" value="{{ f.group|default:'' }}"><input type="hidden" name="f_supplier" value="{{ f.supplier|default:'' }}"><input type="hidden" name="f_country" value="{{ f.country|default:'' }}"><input type="hidden" name="f_client" value="{{ f.client|default:'' }}"><input type="hidden" name="f_status" value="{{ f.status|default:'' }}"><input type="hidden" name="f_q" value="{{ f.q|default:'' }}"><input type="hidden" name="f_routing" value="{{ f.routing|default:'' }}">
 {% if not is_client %}<div class="bulk" id="nbulk" hidden><b id="ncount">0 selected</b>
   <label id="allwrap" hidden><input type="checkbox" name="select_all_matching" value="1" id="n-allmatch"> All {{ page.paginator.count|intcomma }} matching</label>
   <button class="btn primary" name="action" value="allocate">Allocate to client</button>
@@ -25,12 +26,12 @@
   <button class="btn" name="action" value="block">Block</button>
   <button class="btn" name="action" value="unblock">Unblock</button>
   <button class="btn" name="action" value="delete">Delete</button></div>{% endif %}
-<div class="tablewrap"><table><thead><tr>{% if not is_client %}<th><input type="checkbox" id="n-all" aria-label="Select all on this page"></th>{% endif %}<th>Number</th><th>Country</th>{% if not is_client %}<th>Supplier</th>{% endif %}<th>Billing group</th><th>Routing</th><th>Status</th><th>Allocated to</th><th>Terms</th><th>Date allocated</th></tr></thead><tbody>
-{% for n, a in rows %}<tr>{% if not is_client %}<td><input type="checkbox" name="ids" value="{{ n.pk }}" id="n{{ n.pk }}" aria-label="Select {{ n }}"></td>{% endif %}
+<div class="tablewrap"><table><thead><tr>{% if not is_client %}<th><input type="checkbox" id="n-all" aria-label="Select all on this page"></th>{% endif %}<th>Number</th><th>Country</th>{% if not is_client %}<th>Supplier</th>{% endif %}<th>Billing group</th><th>Usable for</th><th>Status</th><th>Allocated to</th><th>Terms</th><th>Date allocated</th></tr></thead><tbody>
+{% for n, allocs in rows %}<tr>{% if not is_client %}<td><input type="checkbox" name="ids" value="{{ n.pk }}" id="n{{ n.pk }}" aria-label="Select {{ n }}"></td>{% endif %}
 <td class="mono">{{ n.number|e164 }}</td><td>{{ n.billing_group.country }}</td>{% if not is_client %}<td>{{ n.billing_group.supplier }}</td>{% endif %}<td>{{ n.billing_group.title }}</td><td>{{ n.billing_group.get_routing_type_display }}</td>
-<td>{% if n.blocked %}<span class="pill bad">Blocked</span>{% elif a %}<span class="pill ok">Allocated</span>{% else %}<span class="pill free">Free</span>{% endif %}</td>
-<td>{% if a %}{% if not is_client %}<a href="/accounts/{{ a.client_id }}/">{{ a.client }}</a>{% else %}{{ a.client }}{% endif %}{% else %}<span class="muted">—</span>{% endif %}</td>
-<td class="mono">{{ a.payment_terms|default:"" }}</td><td class="mono">{{ a.starts_at|date:"Y-m-d"|default:"" }}</td></tr>
+<td>{% if n.blocked %}<span class="pill bad">Blocked</span>{% elif allocs %}<span class="pill ok">Allocated</span>{% else %}<span class="pill free">Free</span>{% endif %}</td>
+<td>{% for a in allocs|alloc_summary %}{% if not is_client %}<a href="/accounts/{{ a.client.pk }}/">{{ a.client }}</a>{% else %}{{ a.client }}{% endif %} <span class="muted">· {{ a.label }}</span>{% if not forloop.last %}<br>{% endif %}{% empty %}<span class="muted">—</span>{% endfor %}</td>
+<td>{{ allocs.0.payment_terms|default:"" }}</td><td>{{ allocs.0.starts_at|date:"Y-m-d"|default:"" }}</td></tr>
 {% empty %}<tr><td colspan="10" class="empty">No numbers match. {% if not is_client %}<a href="/numbers/add/">Add numbers</a> to a billing group.{% endif %}</td></tr>{% endfor %}
 </tbody></table></div></form>
 {% include "partials/pager.html" %}

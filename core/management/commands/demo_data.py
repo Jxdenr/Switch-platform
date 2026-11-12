@@ -42,12 +42,12 @@ class Command(BaseCommand):
         start = 447700900000
         for gi, s in enumerate(suppliers):
             g, _ = BillingGroup.objects.get_or_create(supplier=s, title=f"UK Mobile {'ABC'[gi]}",
-                                                      defaults={"country": uk, "currency": gbp, "routing_type": "sms",
+                                                      defaults={"country": uk, "currency": gbp, "routing_type": "both",
                                                                 "network": "Mobile"})
-            BillingGroupRate.objects.get_or_create(billing_group=g, slot=1, time_of_day=all_times,
-                                                   defaults={"payment_terms": t3045,
-                                                             "rate_in": Decimal("0.02000"),
-                                                             "rate_out": Decimal("0.01500")})
+            for ch, rin, rout in [("sms", "0.02000", "0.01500"), ("voice", "0.06000", "0.04500")]:
+                BillingGroupRate.objects.get_or_create(billing_group=g, channel=ch, slot=1, time_of_day=all_times,
+                                                       defaults={"payment_terms": t3045, "rate_in": Decimal(rin),
+                                                                 "rate_out": Decimal(rout)})
             nums = [str(start + gi * 300 + k) for k in range(300)]
             services.add_numbers(g, nums, via="system")
             group_nums = list(Number.objects.filter(billing_group=g)[:240])
