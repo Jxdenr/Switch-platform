@@ -1,26 +1,59 @@
 {% extends "base.html" %}{% load switch humanize %}
 {% block title %}Dashboard{% endblock %}
 {% block content %}
-<div class="pagehead"><div><h1>Dashboard</h1><div class="sub">{{ n_numbers|intcomma }} numbers, {{ n_alloc|intcomma }} allocated</div></div>
-<div class="actions"><a class="btn" href="/sms/records/">SMS records</a>{% if has_voice %}<a class="btn" href="/voice/cdrs/">Call records</a>{% endif %}{% if not is_client %}<a class="btn primary" href="/numbers/add/">+ Add numbers</a>{% endif %}</div></div>
-{% for label, a, v in periods %}
-<div><div class="crumbs" style="margin-bottom:6px">{{ label }}</div>
-<div class="kpis"><div class="kpi"><b>SMS</b><span>{{ a.n|intcomma }}</span></div>
-{% if not is_client %}<div class="kpi"><b>Due in</b><span>{{ a.due_in|money }}</span></div>{% endif %}
-<div class="kpi"><b>{% if is_client %}Earned{% else %}Due out{% endif %}</b><span>{{ a.due_out|money }}</span></div>
-{% if not is_client %}<div class="kpi"><b>Margin</b><span>{{ a.margin|money }}</span></div>{% endif %}</div>
-{% if has_voice %}<div class="kpis"><div class="kpi"><b>Calls</b><span>{{ v.n|intcomma }}</span></div>
-<div class="kpi"><b>Minutes</b><span>{{ v.minutes|floatformat:0|intcomma }}</span></div>
-{% if not is_client %}<div class="kpi"><b>Voice due in</b><span>{{ v.due_in|money }}</span></div>{% endif %}
-<div class="kpi"><b>{% if is_client %}Voice earned{% else %}Voice due out{% endif %}</b><span>{{ v.due_out|money }}</span></div>
-{% if not is_client %}<div class="kpi"><b>Voice margin</b><span>{{ v.margin|money }}</span></div>{% endif %}</div>{% endif %}</div>
-{% endfor %}
-<div class="grid2">
-{% if not is_client %}<div class="card"><h2>Binds down</h2>
-{% if down %}<table><tbody>{% for b in down %}<tr><td>{{ b.account }}</td><td>{{ b.title }}</td><td><span class="pill bad">Down</span></td></tr>{% endfor %}</tbody></table>
-{% else %}<p class="muted" style="margin:0">Every enabled bind is up.</p>{% endif %}</div>{% endif %}
-<div class="card"><h2>Recent forwarding failures</h2>
-{% if recent_failed %}<table><tbody>{% for m in recent_failed %}<tr><td class="mono">{{ m.received_at|date:"d M H:i" }}</td><td>{{ m.client }}</td><td class="muted">{{ m.last_error|truncatechars:50 }}</td></tr>{% endfor %}</tbody></table>
-{% else %}<p class="muted" style="margin:0">No failures.</p>{% endif %}</div>
+<div class="pagehead"><div><h1>Dashboard</h1><div class="sub">{{ period_label }} · {% for k, l in channels %}{% if k == channel %}{{ l }}{% endif %}{% endfor %} · compared with the period before</div></div>
+<div class="actions">
+  <details class="menu"><summary class="btn">{{ period_label }} ▾</summary><div class="menu-list">
+    {% for k, l in periods %}<a href="?period={{ k }}&amp;channel={{ channel }}" class="{% if k == period %}on{% endif %}">{{ l }}</a>{% endfor %}</div></details>
+  {% if has_voice %}<div class="seg">{% for k, l in channels %}<a href="?period={{ period }}&amp;channel={{ k }}" class="{% if k == channel %}on{% endif %}">{{ l }}</a>{% endfor %}</div>{% endif %}
+  {% if not is_client %}<a class="btn primary" href="/numbers/add/">+ Add numbers</a>{% endif %}
+</div></div>
+
+<div class="statrow">
+  {% if not is_client %}
+  <div class="stat"><b>Due in</b><span class="v">{{ t.due_in|money }}</span>{% include "core/_delta.html" with v=delta.due_in %}<small>What suppliers owe us</small></div>
+  <div class="stat"><b>Due out</b><span class="v">{{ t.due_out|money }}</span>{% include "core/_delta.html" with v=delta.due_out %}<small>What we owe clients</small></div>
+  <div class="stat accent"><b>Margin</b><span class="v">{{ t.margin|money }}</span>{% include "core/_delta.html" with v=delta.margin %}<small>{{ t.margin_pct|floatformat:1 }}% of due in</small></div>
+  {% else %}
+  <div class="stat accent"><b>Earned</b><span class="v">{{ t.due_out|money }}</span>{% include "core/_delta.html" with v=delta.due_out %}<small>For traffic delivered to you</small></div>
+  {% endif %}
+  <div class="stat"><b>Traffic</b><span class="v traffic">{% if channel != "voice" %}{{ t.sms|intcomma }} <em>SMS</em>{% endif %}{% if channel == "all" and has_voice %} · {% endif %}{% if channel != "sms" and has_voice %}{{ t.minutes|floatformat:0|intcomma }} <em>min</em>{% endif %}</span>{% if channel == "voice" %}{% include "core/_delta.html" with v=delta.minutes %}{% else %}{% include "core/_delta.html" with v=delta.sms %}{% endif %}<small>{% if channel != "sms" and has_voice %}{{ t.calls|intcomma }} calls{% else %}Inbound messages{% endif %}</small></div>
 </div>
+
+<div class="dashgrid">
+  <section class="card"><div class="panelhead"><h2>{% if is_client %}Earnings{% else %}Due in and margin{% endif %} by {% if period == "today" %}hour{% else %}day{% endif %}</h2>
+    {% if not is_client %}<div class="legend"><span><i class="sw in"></i>Due in</span><span><i class="sw m"></i>Margin kept</span></div>{% endif %}</div>
+    {% if chart %}<svg class="chart" viewBox="0 0 {{ chart.w }} {{ chart.h }}" role="img" aria-label="Due in by {% if period == 'today' %}hour{% else %}day{% endif %}">
+      <line x1="0" x2="{{ chart.w }}" y1="{{ chart.base }}" y2="{{ chart.base }}" class="axis"/>
+      {% for b in chart.bars %}<g><title>{{ b.label }}: due in {{ b.due_in|money }}, margin {{ b.margin|money }}</title>
+        <rect x="{{ b.x }}" y="{{ b.y_in }}" width="{{ b.w }}" height="{{ b.h_in }}" rx="2" class="{% if is_client %}m{% else %}in{% endif %}"/>
+        {% if not is_client %}<rect x="{{ b.x }}" y="{{ b.y_m }}" width="{{ b.w }}" height="{{ b.h_m }}" rx="2" class="m"/>{% endif %}
+        {% if b.show_label %}<text x="{{ b.lx }}" y="{{ chart.ly }}" text-anchor="middle">{{ b.label }}</text>{% endif %}</g>{% endfor %}
+    </svg>{% endif %}
+  </section>
+
+  {% if not is_client %}<section class="card"><h2>Needs attention</h2>
+    <ul class="checklist">
+      <li><a href="/binds/">{% if down %}<span class="pill bad">{{ down|length }}</span> binds down{% else %}<span class="pill ok">OK</span> All binds up{% endif %}</a>
+        {% if down %}<ul>{% for b in down|slice:":4" %}<li>{{ b.account }} · {{ b.title }}</li>{% endfor %}{% if down|length > 4 %}<li class="muted">and {{ down|length|add:"-4" }} more</li>{% endif %}</ul>{% endif %}</li>
+      <li><a href="/sms/records/?status=failed">{% if n_failed %}<span class="pill warn">{{ n_failed|intcomma }}</span> SMS not delivered to clients{% else %}<span class="pill ok">OK</span> No delivery failures{% endif %}</a></li>
+      <li><a href="/numbers/?status=free"><span class="pill free">{{ alloc_pct|floatformat:0 }}%</span> numbers allocated</a><div class="bar"><i style="width:{{ alloc_pct|floatformat:0 }}%"></i></div><div class="muted small">{{ n_alloc|intcomma }} of {{ n_numbers|intcomma }}</div></li>
+    </ul></section>{% endif %}
+</div>
+
+{% if not is_client %}
+<div class="grid2">
+  <section class="card"><div class="panelhead"><h2>Top suppliers</h2><a class="btn sm" href="/sms/stats/?by=supplier">All</a></div>
+    <table class="rank"><thead><tr><th>Supplier</th>{% if channel != "voice" %}<th class="num">SMS</th>{% endif %}{% if channel != "sms" and has_voice %}<th class="num">Min</th>{% endif %}<th class="num">Due in</th></tr></thead><tbody>
+    {% for r in top_suppliers %}<tr><td><a href="/accounts/{{ r.id }}/?tab=statement">{{ r.title }}</a><div class="bar thin"><i style="width:{{ r.share|floatformat:0 }}%"></i></div></td>{% if channel != "voice" %}<td class="num">{{ r.sms|intcomma }}</td>{% endif %}{% if channel != "sms" and has_voice %}<td class="num">{{ r.minutes|floatformat:0 }}</td>{% endif %}<td class="num"><b>{{ r.amount|money }}</b></td></tr>
+    {% empty %}<tr><td colspan="4" class="empty">No traffic in this period.</td></tr>{% endfor %}</tbody></table></section>
+  <section class="card"><div class="panelhead"><h2>Top clients</h2><a class="btn sm" href="/sms/stats/?by=client">All</a></div>
+    <table class="rank"><thead><tr><th>Client</th>{% if channel != "voice" %}<th class="num">SMS</th>{% endif %}{% if channel != "sms" and has_voice %}<th class="num">Min</th>{% endif %}<th class="num">Due out</th></tr></thead><tbody>
+    {% for r in top_clients %}<tr><td><a href="/accounts/{{ r.id }}/?tab=statement">{{ r.title }}</a><div class="bar thin"><i style="width:{{ r.share|floatformat:0 }}%"></i></div></td>{% if channel != "voice" %}<td class="num">{{ r.sms|intcomma }}</td>{% endif %}{% if channel != "sms" and has_voice %}<td class="num">{{ r.minutes|floatformat:0 }}</td>{% endif %}<td class="num"><b>{{ r.amount|money }}</b></td></tr>
+    {% empty %}<tr><td colspan="4" class="empty">No traffic in this period.</td></tr>{% endfor %}</tbody></table></section>
+</div>
+{% if recent_failed %}<details class="card fold"><summary><h2>Latest delivery failures</h2><span class="muted">{{ n_failed|intcomma }} waiting to retry or failed</span></summary>
+  <table><tbody>{% for m in recent_failed %}<tr><td class="mono">{{ m.received_at|date:"d M H:i" }}</td><td>{{ m.client }}</td><td class="mono">{{ m.destination|e164 }}</td><td class="muted">{{ m.last_error|truncatechars:60 }}</td></tr>{% endfor %}</tbody></table>
+  <p style="margin:10px 0 0"><a href="/sms/records/?status=failed">See all failed SMS</a></p></details>{% endif %}
+{% endif %}
 {% endblock %}

@@ -34,7 +34,7 @@ def _group_qs():
     allocated = Allocation.objects.filter(number=OuterRef("pk"), ends_at__isnull=True)
     return BillingGroup.objects.select_related("supplier", "country", "currency", "number_type").annotate(
         n_total=Count("numbers", distinct=True),
-        n_alloc=Count("numbers", filter=Q(numbers__allocations__ends_at__isnull=True), distinct=True),
+        n_alloc=Count("numbers", filter=Q(numbers__allocations__isnull=False, numbers__allocations__ends_at__isnull=True), distinct=True),
     ).order_by("country__name", "title")
 
 

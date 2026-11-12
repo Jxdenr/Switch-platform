@@ -1,0 +1,1 @@
+{% if v is not None %}<span class="delta {% if v >= 0 %}{% if invert %}down{% else %}up{% endif %}{% else %}{% if invert %}up{% else %}down{% endif %}{% endif %}">{% if v >= 0 %}▲{% else %}▼{% endif %} {% if v > 999 %}999+{% elif v < -999 %}999+{% else %}{{ v|floatformat:0 }}{% endif %}%</span>{% else %}<span class="delta flat">new</span>{% endif %}

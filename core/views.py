@@ -1,7 +1,4 @@
-from datetime import timedelta
-
 from django.contrib.auth.decorators import login_required
-from django.db.models import Count, Q, Sum
 from django.http import HttpResponse
 from django.shortcuts import redirect, render
 from django.utils import timezone
@@ -16,30 +13,31 @@ from voice.models import Call
 
 @login_required
 def dashboard(request):
-    now = timezone.now()
+    from . import dashboard as d
     acc = client_account(request.user)
-    base = Message.objects.exclude(status__in=[Message.NO_ROUTE, Message.BLOCKED])
-    calls = Call.objects.exclude(client__isnull=True)
-    if acc:
-        base, calls = base.filter(client=acc), calls.filter(client=acc)
-    periods = []
-    for label, since in [("Today", timezone.localtime(now).replace(hour=0, minute=0, second=0, microsecond=0)),
-                         ("7 days", now - timedelta(days=7)), ("Month", now - timedelta(days=30))]:
-        a = base.filter(received_at__gte=since).aggregate(n=Count("pk"), due_in=Sum("rate_in"), due_out=Sum("rate_out"))
-        a["margin"] = (a["due_in"] or 0) - (a["due_out"] or 0)
-        v = calls.filter(start_stamp__gte=since).aggregate(n=Count("pk"), connected=Count("pk", filter=Q(billsec__gt=0)),
-                                                           secs=Sum("billable_seconds"), due_in=Sum("due_in"),
-                                                           due_out=Sum("due_out"))
-        v["minutes"] = (v["secs"] or 0) / 60
-        v["margin"] = (v["due_in"] or 0) - (v["due_out"] or 0)
-        periods.append((label, a, v))
-    down = [] if acc else (list(SmppUser.objects.filter(enabled=True, bound=False).select_related("account")) +
-                           list(Smsc.objects.filter(enabled=True, bound=False).select_related("account")))
-    recent_failed = base.filter(status=Message.FAILED).select_related("client")[:8]
-    return render(request, "core/dashboard.html", {
-        "periods": periods, "down": down, "recent_failed": recent_failed, "nav": "dashboard",
-        "n_numbers": Number.objects.count(), "n_alloc": Allocation.objects.filter(ends_at__isnull=True).count(),
-        "is_client": bool(acc), "has_voice": Call.objects.exists()})
+    period = request.GET.get("period") if request.GET.get("period") in dict(d.PERIODS) else "7d"
+    channel = request.GET.get("channel") if request.GET.get("channel") in dict(d.CHANNELS) else "all"
+    start, end, (pstart, pend) = d.period_bounds(period)
+    now_t, prev_t = d.totals(start, end, channel, acc), d.totals(pstart, pend, channel, acc)
+    ctx = {"nav": "dashboard", "is_client": bool(acc), "period": period, "channel": channel,
+           "periods": d.PERIODS, "channels": d.CHANNELS, "period_label": dict(d.PERIODS)[period],
+           "t": now_t, "delta": {k: d.change(now_t[k], prev_t[k]) for k in ("due_in", "due_out", "margin", "sms",
+                                                                              "minutes")},
+           "chart": d.chart(d.series(start, end, channel, period == "today", acc)),
+           "has_voice": Call.objects.exists()}
+    if not acc:
+        failed = Message.objects.filter(status=Message.FAILED)
+        n_numbers = Number.objects.count()
+        n_alloc = Allocation.objects.filter(ends_at__isnull=True).values("number").distinct().count()
+        ctx.update({
+            "top_suppliers": d.top_accounts(start, end, channel, "supplier"),
+            "top_clients": d.top_accounts(start, end, channel, "client"),
+            "down": (list(SmppUser.objects.filter(enabled=True, bound=False).select_related("account"))
+                     + list(Smsc.objects.filter(enabled=True, bound=False).select_related("account"))),
+            "n_failed": failed.count(), "recent_failed": failed.select_related("client")[:5],
+            "n_numbers": n_numbers, "n_alloc": n_alloc,
+            "alloc_pct": (n_alloc / n_numbers * 100) if n_numbers else 0})
+    return render(request, "core/dashboard.html", ctx)
 
 
 @login_required

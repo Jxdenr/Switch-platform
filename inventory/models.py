@@ -56,7 +56,7 @@ class BillingGroup(models.Model):
 
     def counts(self):
         total = self.numbers.count()
-        allocated = self.numbers.filter(allocations__ends_at__isnull=True).distinct().count()
+        allocated = self.numbers.filter(allocations__isnull=False, allocations__ends_at__isnull=True).distinct().count()
         return total, allocated, total - allocated
 
 
