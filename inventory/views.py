@@ -223,7 +223,7 @@ class AllocateForm(forms.Form):
     payment_terms = forms.ModelChoiceField(PaymentTerms.objects.all(), required=False)
     all_terms = forms.BooleanField(required=False)
     rate_out = forms.DecimalField(required=False, max_digits=10, decimal_places=5,
-                                  help_text="Client payout per SMS. Leave blank to use the billing group's default.")
+                                  help_text="Client payout per SMS (or per minute for voice). Leave blank to use the billing group's default for each channel.")
     time_of_day = forms.ModelChoiceField(TimeOfDay.objects.all(), required=False)
     service = forms.CharField(required=False, help_text="Voice only")
 
