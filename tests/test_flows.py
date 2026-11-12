@@ -6,6 +6,7 @@ from unittest import mock
 from django.contrib.auth.models import User
 from django.core.management import call_command
 from django.test import TestCase, override_settings
+from django.utils import timezone
 
 from core.models import Country, Currency, PaymentTerms, TimeOfDay
 from crm.models import Account, HttpEndpoint, SmppUser
@@ -149,3 +150,88 @@ class ChannelTests(TestCase):
         created, _ = services.allocate(Number.objects.filter(number="447700900200"), self.a, self.terms,
                                        channels=["voice"])
         self.assertEqual(created, 0)
+
+
+@override_settings(INGEST_TOKEN="t0k")
+class VoiceTests(TestCase):
+    """Call records: billing increments, routing on the voice allocation, FreeSWITCH ingest, stats."""
+
+    def setUp(self):
+        call_command("seed_lookups", verbosity=0)
+        self.terms = PaymentTerms.objects.get(title="30/45")
+        self.sup = Account.objects.create(title="Sup", is_supplier=True)
+        self.a = Account.objects.create(title="A", is_client=True)
+        self.b = Account.objects.create(title="B", is_client=True)
+        uk, gbp = Country.objects.get(name="United Kingdom"), Currency.objects.get(code="GBP")
+        self.g = BillingGroup.objects.create(supplier=self.sup, title="Both", country=uk, currency=gbp,
+                                             routing_type="both", billing_increment_first=60,
+                                             billing_increment_next=60)
+        BillingGroupRate.objects.create(billing_group=self.g, channel="sms", slot=1, payment_terms=self.terms,
+                                        rate_in=Decimal("0.02"), rate_out=Decimal("0.01"))
+        BillingGroupRate.objects.create(billing_group=self.g, channel="voice", slot=1, payment_terms=self.terms,
+                                        rate_in=Decimal("0.06"), rate_out=Decimal("0.04"))
+        services.add_numbers(self.g, ["447700900100", "447700900101"])
+        n = Number.objects.filter(number="447700900100")
+        services.allocate(n, self.a, self.terms, channels=["sms"])
+        services.allocate(n, self.b, self.terms, channels=["voice"])
+
+    def _cdr(self, uuid="u1", to="+447700900100", billsec=61):
+        from datetime import datetime, timezone as tz
+        return {"variables": {"uuid": uuid, "destination_number": to, "caller_id_number": "442079460000",
+                              "start_uepoch": str(int(datetime(2026, 11, 1, 12, tzinfo=tz.utc).timestamp() * 1e6)),
+                              "billsec": str(billsec), "duration": str(billsec + 5),
+                              "hangup_cause": "NORMAL_CLEARING", "hangup_cause_q850": "16"}}
+
+    def test_billing_increments(self):
+        from voice.billing import billable_seconds
+        self.assertEqual(billable_seconds(0, 60, 60), 0)
+        self.assertEqual(billable_seconds(1, 60, 60), 60)
+        self.assertEqual(billable_seconds(61, 60, 60), 120)
+        self.assertEqual(billable_seconds(61, 30, 6), 66)
+        self.assertEqual(billable_seconds(7, 1, 1), 7)
+        self.assertEqual(billable_seconds(7, 1, 1, minimum=30), 30)
+
+    def test_call_routes_on_voice_allocation_and_bills(self):
+        from voice.billing import record_call
+        c = record_call(uuid="x", number_called="+44 7700 900100", billsec=61, start=timezone.now())
+        self.assertEqual(c.client, self.b)  # voice goes to B even though SMS goes to A
+        self.assertEqual(c.billable_seconds, 120)
+        self.assertEqual((c.due_in, c.due_out), (Decimal("0.12"), Decimal("0.08")))
+        unrouted = record_call(uuid="y", number_called="447700900101", billsec=30, start=timezone.now())
+        self.assertIsNone(unrouted.client)
+        self.assertEqual((unrouted.due_in, unrouted.due_out), (Decimal("0.06"), Decimal("0")))
+
+    def test_freeswitch_ingest_token_and_dedup(self):
+        import json
+        from voice.models import Call
+        body = json.dumps(self._cdr())
+        r = self.client.post("/ingest/freeswitch/?token=bad", body, content_type="application/json")
+        self.assertEqual(r.status_code, 403)
+        for _ in range(2):  # FreeSWITCH retries must not double-bill
+            r = self.client.post("/ingest/freeswitch/?token=t0k", body, content_type="application/json")
+            self.assertEqual(r.status_code, 200)
+        c = Call.objects.get()
+        self.assertEqual((c.client, c.billable_seconds, c.hangup_cause_q850), (self.b, 120, 16))
+
+    def test_cdrs_and_stats_pages(self):
+        import json
+        from voice.models import Call
+        for i, to in enumerate(["447700900100", "447700900100", "447700900101"]):
+            self.client.post("/ingest/freeswitch/?token=t0k", json.dumps(self._cdr(f"u{i}", to)),
+                             content_type="application/json")
+        Call.objects.update(start_stamp=timezone.now())
+        staff = User.objects.create_superuser("admin", "a@example.com", "pass-12345678")
+        self.client.force_login(staff)
+        self.assertContains(self.client.get("/voice/cdrs/"), "447700900101")
+        r = self.client.get("/voice/stats/?by=client")
+        self.assertEqual(r.status_code, 200)
+        self.assertEqual(sum(row["calls"] for row in r.context["rows"]), 3)
+        # client portal: B sees only its own calls and no supplier rates
+        u = User.objects.create_user("b-user", password="pass-12345678")
+        u.profile.role, u.profile.account = "client", self.b
+        u.profile.save()
+        self.client.force_login(u)
+        r = self.client.get("/voice/cdrs/")
+        self.assertEqual(r.context["page"].paginator.count, 2)
+        self.assertNotContains(r, "Due in")
+        self.assertEqual(self.client.get("/voice/stats/").status_code, 403)

@@ -23,6 +23,7 @@ INSTALLED_APPS = [
     "crm",
     "inventory",
     "sms",
+    "voice",
 ]
 
 MIDDLEWARE = [

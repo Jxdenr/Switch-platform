@@ -56,6 +56,15 @@ Open http://127.0.0.1:8000 and sign in. Run the tests with `python manage.py tes
 | Jasmin sync and bind status (`sync_jasmin`) | Written, **needs testing against a live Jasmin and a test supplier bind** |
 | REST API for clients | Next |
 | AI assistant | After v1 (see docs/platform-knowledge.md) |
-| Voice (FreeSWITCH, CDRs, live calls) | Later; data model already has the fields |
+| Numbers for SMS, voice or both (uploaded once, allocated per channel) | Done, tested |
+| Voice call records (FreeSWITCH CDR ingest), billing increments, voice stats, dashboard minutes | Done, tested; **needs testing against a live FreeSWITCH** |
+| Live voice calls (routing calls to clients through FreeSWITCH) | Later |
 
 Deliberately not included: fake ("random") delivery receipts and randomised call durations.
+
+## Voice call records
+
+Point FreeSWITCH's `mod_json_cdr` at `https://<host>/ingest/freeswitch/?token=<INGEST_TOKEN>` (one POST per call;
+JSON or form-encoded `cdr=` both work). Each call is routed on the number's active **voice** allocation, billed with
+the billing group's increments (e.g. 60/60), minimum and maximum duration (the allocation's own min/max override the
+group's), and the per-minute voice rates are copied onto the call. Retries with the same call UUID are ignored.

@@ -1,0 +1,29 @@
+{% extends "base.html" %}{% load switch humanize %}
+{% block title %}Call records{% endblock %}
+{% block content %}
+<div class="pagehead"><div><h1>Call records</h1><div class="sub">{{ date_range }}</div></div>
+<div class="actions"><a class="btn primary" href="?{% qs_without 'page' %}&export=csv">Export CSV</a></div></div>
+<div class="kpis"><div class="kpi"><b>Calls</b><span>{{ totals.calls|intcomma }}</span></div>
+<div class="kpi"><b>Connected</b><span>{{ totals.connected|intcomma }}</span></div>
+<div class="kpi"><b>Billable minutes</b><span>{{ minutes|floatformat:0|intcomma }}</span></div>
+{% if not is_client %}<div class="kpi"><b>Due in</b><span>{{ totals.due_in|money }}</span></div>{% endif %}
+<div class="kpi"><b>{% if is_client %}Earned{% else %}Due out{% endif %}</b><span>{{ totals.due_out|money }}</span></div></div>
+<form class="filters" method="get">
+  <label>Date range<input type="text" name="date_range" id="v-date" value="{{ date_range }}" size="34"></label>
+  {% if not is_client %}<label>Supplier<select name="supplier" id="v-supplier"><option value="">Any</option>{% for s in suppliers %}<option value="{{ s.pk }}" {% if f.supplier == s.pk|stringformat:"s" %}selected{% endif %}>{{ s }}</option>{% endfor %}</select></label>
+  <label>Client<select name="client" id="v-client"><option value="">Any</option>{% for c in clients %}<option value="{{ c.pk }}" {% if f.client == c.pk|stringformat:"s" %}selected{% endif %}>{{ c }}</option>{% endfor %}</select></label>{% endif %}
+  <label>Number called<input type="text" name="number" id="v-number" value="{{ f.number|default:'' }}"></label>
+  <label>Caller ID<input type="text" name="caller" id="v-caller" value="{{ f.caller|default:'' }}"></label>
+  <label>Answered<select name="connected" id="v-conn"><option value="">Any</option><option value="1" {% if f.connected == "1" %}selected{% endif %}>Connected</option><option value="0" {% if f.connected == "0" %}selected{% endif %}>Not connected</option></select></label>
+  <button class="btn primary">Search</button>
+</form>
+<div class="tablewrap"><table><thead><tr><th>Start</th><th class="num">Duration</th><th class="num">Billable</th><th>Number called</th><th>Caller ID</th>{% if not is_client %}<th>Supplier</th>{% endif %}<th>Client</th><th>Hangup cause</th><th class="num">PDD</th><th class="num">MOS</th>{% if not is_client %}<th class="num">Due in</th>{% endif %}<th class="num">{% if is_client %}Earned{% else %}Due out{% endif %}</th></tr></thead><tbody>
+{% for c in page %}<tr><td>{{ c.start_stamp|date:"Y-m-d H:i:s" }}</td><td class="num">{{ c.duration }}s</td><td class="num">{{ c.billable_seconds }}s</td><td>{{ c.number_called|e164 }}</td><td>{{ c.caller_id }}</td>
+{% if not is_client %}<td>{{ c.supplier|default:"—" }}</td>{% endif %}<td>{{ c.client|default:"—" }}</td>
+<td>{% if c.billsec %}<span class="pill ok">{{ c.hangup_cause|default:"NORMAL_CLEARING" }}</span>{% else %}<span class="pill free">{{ c.hangup_cause|default:"—" }}</span>{% endif %}</td>
+<td class="num">{% if c.pdd_ms %}{{ c.pdd_ms }}ms{% endif %}</td><td class="num">{{ c.mos_in|default:"" }}</td>
+{% if not is_client %}<td class="num">{{ c.due_in|money }}</td>{% endif %}<td class="num">{{ c.due_out|money }}</td></tr>
+{% empty %}<tr><td colspan="12" class="empty">No calls in this range.</td></tr>{% endfor %}
+</tbody></table></div>
+{% include "partials/pager.html" %}
+{% endblock %}

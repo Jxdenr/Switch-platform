@@ -2,13 +2,18 @@
 {% block title %}Dashboard{% endblock %}
 {% block content %}
 <div class="pagehead"><div><h1>Dashboard</h1><div class="sub">{{ n_numbers|intcomma }} numbers, {{ n_alloc|intcomma }} allocated</div></div>
-<div class="actions"><a class="btn" href="/sms/records/">SMS records</a>{% if not is_client %}<a class="btn primary" href="/numbers/add/">+ Add numbers</a>{% endif %}</div></div>
-{% for label, a in periods %}
+<div class="actions"><a class="btn" href="/sms/records/">SMS records</a>{% if has_voice %}<a class="btn" href="/voice/cdrs/">Call records</a>{% endif %}{% if not is_client %}<a class="btn primary" href="/numbers/add/">+ Add numbers</a>{% endif %}</div></div>
+{% for label, a, v in periods %}
 <div><div class="crumbs" style="margin-bottom:6px">{{ label }}</div>
 <div class="kpis"><div class="kpi"><b>SMS</b><span>{{ a.n|intcomma }}</span></div>
 {% if not is_client %}<div class="kpi"><b>Due in</b><span>{{ a.due_in|money }}</span></div>{% endif %}
 <div class="kpi"><b>{% if is_client %}Earned{% else %}Due out{% endif %}</b><span>{{ a.due_out|money }}</span></div>
-{% if not is_client %}<div class="kpi"><b>Margin</b><span>{{ a.margin|money }}</span></div>{% endif %}</div></div>
+{% if not is_client %}<div class="kpi"><b>Margin</b><span>{{ a.margin|money }}</span></div>{% endif %}</div>
+{% if has_voice %}<div class="kpis"><div class="kpi"><b>Calls</b><span>{{ v.n|intcomma }}</span></div>
+<div class="kpi"><b>Minutes</b><span>{{ v.minutes|floatformat:0|intcomma }}</span></div>
+{% if not is_client %}<div class="kpi"><b>Voice due in</b><span>{{ v.due_in|money }}</span></div>{% endif %}
+<div class="kpi"><b>{% if is_client %}Voice earned{% else %}Voice due out{% endif %}</b><span>{{ v.due_out|money }}</span></div>
+{% if not is_client %}<div class="kpi"><b>Voice margin</b><span>{{ v.margin|money }}</span></div>{% endif %}</div>{% endif %}</div>
 {% endfor %}
 <div class="grid2">
 {% if not is_client %}<div class="card"><h2>Binds down</h2>

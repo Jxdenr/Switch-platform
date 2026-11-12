@@ -25,6 +25,7 @@ ICONS = {
     "stat": '<path d="M2.5 13.5V8M6.5 13.5V3M10.5 13.5V6.5M14 13.5V10"/>',
     "bind": '<path d="M6 10 10 6M4.5 7.5 3 9a2.5 2.5 0 0 0 3.5 3.5L8 11M8 5l1.5-1.5A2.5 2.5 0 0 1 13 7l-1.5 1.5"/>',
     "block": '<circle cx="8" cy="8" r="5.8"/><path d="m4 4 8 8"/>',
+    "phone": '<path d="M4 2h2.5l1 3-1.5 1a7 7 0 0 0 3.5 3.5l1-1.5 3 1V12a2 2 0 0 1-2 2A10 10 0 0 1 2 4a2 2 0 0 1 2-2z"/>',
     "set": '<circle cx="8" cy="8" r="2.2"/><path d="M8 1.5v2M8 12.5v2M1.5 8h2M12.5 8h2M3.4 3.4l1.4 1.4M11.2 11.2l1.4 1.4M3.4 12.6l1.4-1.4M11.2 4.8l1.4-1.4"/>',
 }
 
@@ -39,6 +40,8 @@ NAV = [
              ("ticker", "Live ticker", "/sms/ticker/", "live", False),
              ("stats", "SMS stats", "/sms/stats/", "stat", True),
              ("blocking", "Blocking rules", "/sms/blocking/", "block", True)]),
+    ("Voice", [("cdrs", "Call records", "/voice/cdrs/", "phone", False),
+               ("voicestats", "Voice stats", "/voice/stats/", "stat", True)]),
     ("Admin", [("admin", "Users & settings", "/admin/", "set", True)]),
 ]
 

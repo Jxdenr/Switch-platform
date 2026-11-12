@@ -6,6 +6,7 @@ from core import views as core
 from crm import views as crm
 from inventory import views as inv
 from sms import views as sms
+from voice import views as voice
 
 urlpatterns = [
     path("", core.dashboard, name="dashboard"),
@@ -37,5 +38,9 @@ urlpatterns = [
     path("sms/blocking/", sms.block_rules, name="block_rules"),
     path("sms/<int:pk>/resend/", sms.resend, name="sms_resend"),
     path("ingest/jasmin/", sms.ingest_jasmin, name="ingest_jasmin"),
+    # Voice
+    path("voice/cdrs/", voice.cdrs, name="cdrs"),
+    path("voice/stats/", voice.stats, name="voice_stats"),
+    path("ingest/freeswitch/", voice.ingest_freeswitch, name="ingest_freeswitch"),
     path("admin/", admin.site.urls),
 ]
