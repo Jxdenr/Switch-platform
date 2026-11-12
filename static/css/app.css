@@ -1,7 +1,8 @@
 /* Switch console. Colourways: harbour (default), graphite, paper. Layouts: sidebar, top, rail. */
 :root{
-  --font-ui:"IBM Plex Sans",system-ui,-apple-system,"Segoe UI",sans-serif;
-  --font-data:"IBM Plex Mono",ui-monospace,"SFMono-Regular",Menlo,monospace;
+  /* One plain, readable face everywhere (like the old switch). Numbers use tabular digits so columns line up. */
+  --font-ui:-apple-system,BlinkMacSystemFont,"Segoe UI",Roboto,"Helvetica Neue",Arial,sans-serif;
+  --font-data:var(--font-ui);
   --bg:#f3f5f7;--surface:#fff;--surface-2:#f7f9fa;--line:#dfe4e8;--fg:#16212b;--muted:#5f6c78;
   --ok:#1d8a52;--ok-bg:#e3f4ea;--warn:#a86400;--warn-bg:#fbf0dc;--bad:#c03a2b;--bad-bg:#fbe6e3;
   --nav-bg:#0f2f3a;--nav-fg:#c9dde2;--nav-muted:#7fa1aa;--nav-active:#164553;--accent:#0e8a8a;--accent-fg:#fff;--accent-soft:#dff1f0;
@@ -16,7 +17,7 @@
 }
 *{box-sizing:border-box}
 html,body{height:100%}
-body{margin:0;background:var(--bg);color:var(--fg);font:14px/1.45 var(--font-ui)}
+body{margin:0;background:var(--bg);color:var(--fg);font:14px/1.45 var(--font-ui);font-variant-numeric:tabular-nums}
 a{color:var(--accent)}
 button,select,input,textarea{font:inherit;color:inherit}
 :focus-visible{outline:2px solid var(--accent);outline-offset:2px}
@@ -85,7 +86,7 @@ button,select,input,textarea{font:inherit;color:inherit}
 .kpis{display:grid;grid-template-columns:repeat(auto-fit,minmax(150px,1fr));gap:1px;background:var(--line);border:1px solid var(--line);border-radius:8px;overflow:hidden}
 .kpi{background:var(--surface);padding:12px 14px}
 .kpi b{display:block;font-size:11px;text-transform:uppercase;letter-spacing:.06em;color:var(--muted);font-weight:600}
-.kpi span{font-family:var(--font-data);font-size:20px;font-weight:500}
+.kpi span{font-size:20px;font-weight:600}
 .kpi em{font-style:normal;font-size:12px;color:var(--muted);margin-left:6px}
 .filters{display:flex;flex-wrap:wrap;gap:8px;align-items:flex-end;background:var(--surface);border:1px solid var(--line);border-radius:8px;padding:10px 12px}
 .filters label{display:flex;flex-direction:column;gap:3px;font-size:11px;text-transform:uppercase;letter-spacing:.05em;color:var(--muted);font-weight:600}
