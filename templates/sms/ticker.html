@@ -1,0 +1,18 @@
+{% extends "base.html" %}
+{% block title %}Live ticker{% endblock %}
+{% block content %}
+<div class="pagehead"><div><h1>Live ticker</h1><div class="sub" id="tk-status">Updating every 3 seconds</div></div>
+<div class="actions"><button class="btn" id="tk-pause" type="button">Pause</button></div></div>
+<div class="tablewrap ticker"><table><thead><tr><th>Time</th><th>Client</th><th>Source</th><th>Destination</th><th>Status</th><th>Message</th></tr></thead><tbody id="tk-body"><tr><td colspan="6" class="empty">Waiting for messages…</td></tr></tbody></table></div>
+{% endblock %}
+{% block scripts %}<script>
+let last=0,paused=false;const body=document.getElementById('tk-body');
+const esc=s=>String(s).replace(/[&<>"]/g,c=>({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;'}[c]));
+async function poll(){if(paused)return;try{const r=await fetch('?format=json&after='+last);const d=await r.json();
+ if(d.rows.length){if(!last)body.innerHTML='';d.rows.reverse().forEach(m=>{last=Math.max(last,m.id);const tr=document.createElement('tr');
+ tr.innerHTML=`<td>${esc(m.at)}</td><td>${esc(m.client)}</td><td>${esc(m.source)}</td><td>+${esc(m.destination)}</td><td>${esc(m.status)}</td><td class="wrap">${esc(m.body)}</td>`;body.prepend(tr)});
+ while(body.children.length>200)body.lastChild.remove()}
+ document.getElementById('tk-status').textContent='Updated '+new Date().toLocaleTimeString()}catch(e){document.getElementById('tk-status').textContent='Connection lost, retrying…'}}
+document.getElementById('tk-pause').onclick=e=>{paused=!paused;e.target.textContent=paused?'Resume':'Pause'};
+poll();setInterval(poll,3000);
+</script>{% endblock %}

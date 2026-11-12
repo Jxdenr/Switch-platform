@@ -1,0 +1,36 @@
+{% extends "base.html" %}{% load switch humanize %}
+{% block title %}SMS records{% endblock %}
+{% block content %}
+<div class="pagehead"><div><h1>SMS records</h1><div class="sub">{{ date_range }}</div></div>
+<div class="actions"><a class="btn" href="/sms/ticker/">Live ticker</a><a class="btn primary" href="?{% qs_without 'page' %}&export=csv">Export CSV</a></div></div>
+<div class="kpis"><div class="kpi"><b>Messages</b><span>{{ totals.n|intcomma }}</span></div>
+{% if not is_client %}<div class="kpi"><b>Due in</b><span>{{ totals.due_in|money }}</span></div>{% endif %}
+<div class="kpi"><b>{% if is_client %}Earned{% else %}Due out{% endif %}</b><span>{{ totals.due_out|money }}</span></div>
+<div class="kpi"><b>Forward failures</b><span{% if totals.failed %} style="color:var(--bad)"{% endif %}>{{ totals.failed|intcomma }}</span></div></div>
+<form class="filters" method="get">
+  <label>Date range<input type="text" name="date_range" id="r-date" value="{{ date_range }}" size="34" class="mono"></label>
+  {% if not is_client %}<label>Supplier<select name="supplier" id="r-supplier"><option value="">Any</option>{% for s in suppliers %}<option value="{{ s.pk }}" {% if f.supplier == s.pk|stringformat:"s" %}selected{% endif %}>{{ s }}</option>{% endfor %}</select></label>
+  <label>SMPP bind<select name="smpp_bind" id="r-smpp"><option value="">Any</option>{% for u in smpp_users %}<option value="{{ u.pk }}" {% if f.smpp_bind == u.pk|stringformat:"s" %}selected{% endif %}>{{ u.title }}</option>{% endfor %}</select></label>
+  <label>HTTP bind<select name="http_bind" id="r-http"><option value="">Any</option>{% for e in endpoints %}<option value="{{ e.pk }}" {% if f.http_bind == e.pk|stringformat:"s" %}selected{% endif %}>{{ e.account }} · {{ e.title }}</option>{% endfor %}</select></label>
+  <label>Client<select name="client" id="r-client"><option value="">Any</option>{% for c in clients %}<option value="{{ c.pk }}" {% if f.client == c.pk|stringformat:"s" %}selected{% endif %}>{{ c }}</option>{% endfor %}</select></label>
+  <label>Status<select name="status" id="r-status"><option value="">Any</option>{% for v, l in statuses %}<option value="{{ v }}" {% if f.status == v %}selected{% endif %}>{{ l }}</option>{% endfor %}</select></label>{% endif %}
+  <label>Source<input type="text" name="source" id="r-source" value="{{ f.source|default:'' }}"></label>
+  <label>Destination<input type="text" name="destination" id="r-dest" value="{{ f.destination|default:'' }}"></label>
+  <details style="align-self:center"><summary class="btn sm">Columns</summary><div style="display:flex;flex-wrap:wrap;gap:8px;margin-top:8px">
+    {% for k, l, on in columns %}<label style="flex-direction:row;gap:4px;text-transform:none;letter-spacing:0;font-weight:400"><input type="checkbox" name="col" value="{{ k }}" id="c-{{ k }}" {% if k in cols %}checked{% endif %}>{{ l }}</label>{% endfor %}</div></details>
+  <button class="btn primary">Search</button>
+</form>
+<div class="tablewrap"><table><thead><tr>{% for k, l, on in columns %}{% if k in cols %}<th>{{ l }}</th>{% endif %}{% endfor %}{% if not is_client %}<th></th>{% endif %}</tr></thead><tbody>
+{% for m in page %}<tr>{% for k, l, on in columns %}{% if k in cols %}
+  {% if k == "received_at" %}<td class="mono">{{ m.received_at|date:"Y-m-d H:i:s" }}</td>
+  {% elif k == "status" %}<td><span class="pill {% if m.status == 'forwarded' %}ok{% elif m.status == 'failed' %}bad{% elif m.status == 'received' %}warn{% else %}free{% endif %}" title="{{ m.last_error }}">{{ m.get_status_display }}</span></td>
+  {% elif k == "body" %}<td class="wrap muted">{{ m.body|truncatechars:120 }}</td>
+  {% elif k == "destination" %}<td class="mono">{{ m.destination|e164 }}</td>
+  {% elif k == "registered_delivery" %}<td>{% if m.registered_delivery %}Yes{% else %}No{% endif %}</td>
+  {% else %}<td>{{ m|attr:k }}</td>{% endif %}
+{% endif %}{% endfor %}
+{% if not is_client %}<td>{% if m.status == "failed" and m.http_endpoint_id %}<form method="post" action="/sms/{{ m.pk }}/resend/">{% csrf_token %}<input type="hidden" name="back" value="{{ request.get_full_path }}"><button class="btn sm">Resend</button></form>{% endif %}</td>{% endif %}</tr>
+{% empty %}<tr><td colspan="16" class="empty">No messages in this range.</td></tr>{% endfor %}
+</tbody></table></div>
+{% include "partials/pager.html" %}
+{% endblock %}

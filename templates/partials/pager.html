@@ -1,0 +1,5 @@
+{% load switch %}
+<div class="foot"><span>Showing {{ page.start_index|default:0 }}–{{ page.end_index|default:0 }} of {{ page.paginator.count }}</span>
+<span class="pager">{% if page.has_previous %}<a class="btn sm" href="?{% qs_without %}&page={{ page.previous_page_number }}">‹ Prev</a>{% endif %}
+Page {{ page.number }} of {{ page.paginator.num_pages }}
+{% if page.has_next %}<a class="btn sm" href="?{% qs_without %}&page={{ page.next_page_number }}">Next ›</a>{% endif %}</span></div>

@@ -1,0 +1,14 @@
+{% extends "base.html" %}{% load switch humanize %}
+{% block title %}Allocate numbers{% endblock %}
+{% block content %}
+<div class="crumbs"><a href="{{ back }}">Numbers</a> / Allocate</div>
+<div class="pagehead"><div><h1>Allocate {{ count|intcomma }} number{{ count|pluralize }}</h1>
+<div class="sub">{% if already %}{{ already|intcomma }} of these are already allocated and will move to the new client.{% else %}All selected numbers are free.{% endif %}</div></div></div>
+<form method="post" action="/numbers/bulk/" class="card stack">{% csrf_token %}
+{% for k, v in carry %}<input type="hidden" name="{{ k }}" value="{{ v }}">{% endfor %}
+<input type="hidden" name="action" value="allocate"><input type="hidden" name="confirm" value="1"><input type="hidden" name="back" value="{{ back }}">
+{% include "partials/form.html" %}
+<div><button class="btn primary">Allocate {{ count|intcomma }} number{{ count|pluralize }}</button> <a class="btn" href="{{ back }}">Cancel</a></div>
+</form>
+<div class="card"><h2>Selected</h2><p class="mono" style="margin:0;white-space:normal">{% for n in numbers %}{{ n.number|e164 }}{% if not forloop.last %}, {% endif %}{% endfor %}{% if count > 20 %} … and {{ count|add:-20|intcomma }} more{% endif %}</p></div>
+{% endblock %}

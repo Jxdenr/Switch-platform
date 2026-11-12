@@ -1,0 +1,56 @@
+<!doctype html>
+<html lang="en" data-cw="{{ ui_colourway }}">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>{% block title %}Switch{% endblock %} · Switch</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=IBM+Plex+Mono:wght@400;500&family=IBM+Plex+Sans:wght@400;500;600;700&display=swap">
+{% load static %}<link rel="stylesheet" href="{% static 'css/app.css' %}">
+</head>
+<body>
+<div class="shell" data-layout="{{ ui_layout }}">
+  <nav class="nav" aria-label="Main">
+    <a class="brand" href="/"><i>SW</i><span>Switch</span></a>
+    {% for g in nav_groups %}<div class="navgroup"><b>{{ g.title }}</b>
+      {% for i in g.items %}<a class="navlink{% if i.key == nav %} on{% endif %}" href="{{ i.url }}" title="{{ i.label }}">{{ i.icon }}<span>{{ i.label }}</span></a>{% endfor %}
+    </div>{% endfor %}
+    <div class="topnav">{% for g in nav_groups %}<details><summary{% for i in g.items %}{% if i.key == nav %} class="on"{% endif %}{% endfor %}>{{ g.title }} ▾</summary>
+      <div class="drop">{% for i in g.items %}<a href="{{ i.url }}">{{ i.label }}</a>{% endfor %}</div></details>{% endfor %}</div>
+  </nav>
+  <div class="main">
+    <header class="topbar">
+      <form class="search" action="/numbers/" method="get" role="search">
+        <svg width="14" height="14" viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="1.6" aria-hidden="true"><circle cx="7" cy="7" r="5"/><path d="m11 11 3.5 3.5"/></svg>
+        <input type="search" name="q" id="globalsearch" placeholder="Find a number…" aria-label="Find a number">
+      </form>
+      {% if not is_client_user %}<a class="binds" href="/binds/">{% if binds_down %}<span class="dot" style="background:var(--bad)"></span>{{ binds_down }} bind{{ binds_down|pluralize }} down{% else %}<span class="dot" style="background:var(--ok)"></span>All binds up{% endif %}</a>{% endif %}
+      <details class="user"><summary><i>{{ user.username|slice:":2"|upper }}</i><span>{{ user.username }}</span></summary>
+        <form class="pop" method="post" action="/ui/">{% csrf_token %}
+          <input type="hidden" name="back" value="{{ request.get_full_path }}">
+          <label for="ui-cw">Colourway</label>
+          <select name="colourway" id="ui-cw">{% for v,l in ui_choices_cw %}{% endfor %}
+            <option value="harbour" {% if ui_colourway == "harbour" %}selected{% endif %}>Harbour (teal)</option>
+            <option value="graphite" {% if ui_colourway == "graphite" %}selected{% endif %}>Graphite (amber)</option>
+            <option value="paper" {% if ui_colourway == "paper" %}selected{% endif %}>Paper (blue)</option></select>
+          <label for="ui-layout">Navigation</label>
+          <select name="layout" id="ui-layout">
+            <option value="sidebar" {% if ui_layout == "sidebar" %}selected{% endif %}>Sidebar</option>
+            <option value="top" {% if ui_layout == "top" %}selected{% endif %}>Top menus</option>
+            <option value="rail" {% if ui_layout == "rail" %}selected{% endif %}>Icon rail</option></select>
+          <button class="btn primary">Save</button>
+        </form></details>
+      <form method="post" action="/logout/">{% csrf_token %}<button class="btn sm">Log out</button></form>
+    </header>
+    <main class="page">
+      {% for m in messages %}<div class="flash{% if m.tags == 'error' %} error{% endif %}" role="status">{{ m }}</div>{% endfor %}
+      {% block content %}{% endblock %}
+    </main>
+  </div>
+</div>
+<script>
+document.addEventListener('keydown',e=>{if((e.ctrlKey||e.metaKey)&&e.key.toLowerCase()==='k'){e.preventDefault();document.getElementById('globalsearch').focus()}});
+</script>
+{% block scripts %}{% endblock %}
+</body>
+</html>

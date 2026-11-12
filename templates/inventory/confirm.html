@@ -1,0 +1,14 @@
+{% extends "base.html" %}{% load switch humanize %}
+{% block title %}Confirm{% endblock %}
+{% block content %}
+<div class="crumbs"><a href="{{ back }}">Numbers</a> / Confirm</div>
+<div class="pagehead"><div><h1>{{ action|capfirst }} {{ count|intcomma }} number{{ count|pluralize }}?</h1>
+<div class="sub">{% if action == "unallocate" %}They become free. Allocation history is kept.{% elif action == "delete" %}Numbers with SMS history are kept; block those instead.{% elif action == "block" %}Inbound SMS to blocked numbers is not forwarded or paid out.{% elif action == "move" %}Rates for future traffic come from the new billing group.{% else %}This can be reversed later.{% endif %}</div></div></div>
+<form method="post" action="/numbers/bulk/" class="card stack">{% csrf_token %}
+{% for k, v in carry %}<input type="hidden" name="{{ k }}" value="{{ v }}">{% endfor %}
+<input type="hidden" name="action" value="{{ action }}"><input type="hidden" name="confirm" value="1"><input type="hidden" name="back" value="{{ back }}">
+{% if action == "move" %}<div class="field"><label for="target_group">Move to billing group</label><select name="target_group" id="target_group" required>{% for g in groups %}<option value="{{ g.pk }}">{{ g.title }} · {{ g.supplier }}</option>{% endfor %}</select></div>{% endif %}
+<p class="mono" style="margin:0;white-space:normal">{% for n in numbers %}{{ n.number|e164 }}{% if not forloop.last %}, {% endif %}{% endfor %}{% if count > 20 %} … and {{ count|add:-20|intcomma }} more{% endif %}</p>
+<div><button class="btn primary{% if action == 'delete' %} danger{% endif %}">Yes, {{ action }} {{ count|intcomma }}</button> <a class="btn" href="{{ back }}">Cancel</a></div>
+</form>
+{% endblock %}

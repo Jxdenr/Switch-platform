@@ -1,0 +1,11 @@
+{% extends "base.html" %}
+{% block title %}{{ label }}{% endblock %}
+{% block content %}
+<div class="crumbs"><a href="/accounts/">Suppliers &amp; clients</a> / <a href="/accounts/{{ acc.pk }}/?tab={{ group }}">{{ acc }}</a></div>
+<div class="pagehead"><h1>{% if obj %}Edit{% else %}New{% endif %} {{ label }}</h1></div>
+<form class="card stack" method="post">{% csrf_token %}{% include "partials/form.html" %}
+<div><button class="btn primary">Save</button> <a class="btn" href="/accounts/{{ acc.pk }}/?tab={{ group }}">Cancel</a></div></form>
+{% if obj %}<form method="post" action="/accounts/{{ acc.pk }}/{{ kind }}/{{ obj.pk }}/delete/" onsubmit="return confirmDelete(this)">{% csrf_token %}
+<button class="btn danger" data-armed="0">Delete</button></form>
+<script>function confirmDelete(f){const b=f.querySelector('button');if(b.dataset.armed==='1')return true;b.dataset.armed='1';b.textContent='Click again to delete';return false}</script>{% endif %}
+{% endblock %}

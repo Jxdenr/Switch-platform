@@ -1,0 +1,21 @@
+{% extends "base.html" %}{% load switch humanize %}
+{% block title %}Dashboard{% endblock %}
+{% block content %}
+<div class="pagehead"><div><h1>Dashboard</h1><div class="sub">{{ n_numbers|intcomma }} numbers, {{ n_alloc|intcomma }} allocated</div></div>
+<div class="actions"><a class="btn" href="/sms/records/">SMS records</a>{% if not is_client %}<a class="btn primary" href="/numbers/add/">+ Add numbers</a>{% endif %}</div></div>
+{% for label, a in periods %}
+<div><div class="crumbs" style="margin-bottom:6px">{{ label }}</div>
+<div class="kpis"><div class="kpi"><b>SMS</b><span>{{ a.n|intcomma }}</span></div>
+{% if not is_client %}<div class="kpi"><b>Due in</b><span>{{ a.due_in|money }}</span></div>{% endif %}
+<div class="kpi"><b>{% if is_client %}Earned{% else %}Due out{% endif %}</b><span>{{ a.due_out|money }}</span></div>
+{% if not is_client %}<div class="kpi"><b>Margin</b><span>{{ a.margin|money }}</span></div>{% endif %}</div></div>
+{% endfor %}
+<div class="grid2">
+{% if not is_client %}<div class="card"><h2>Binds down</h2>
+{% if down %}<table><tbody>{% for b in down %}<tr><td>{{ b.account }}</td><td>{{ b.title }}</td><td><span class="pill bad">Down</span></td></tr>{% endfor %}</tbody></table>
+{% else %}<p class="muted" style="margin:0">Every enabled bind is up.</p>{% endif %}</div>{% endif %}
+<div class="card"><h2>Recent forwarding failures</h2>
+{% if recent_failed %}<table><tbody>{% for m in recent_failed %}<tr><td class="mono">{{ m.received_at|date:"d M H:i" }}</td><td>{{ m.client }}</td><td class="muted">{{ m.last_error|truncatechars:50 }}</td></tr>{% endfor %}</tbody></table>
+{% else %}<p class="muted" style="margin:0">No failures.</p>{% endif %}</div>
+</div>
+{% endblock %}

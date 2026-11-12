@@ -1,0 +1,12 @@
+{% extends "base.html" %}
+{% block title %}Blocking rules{% endblock %}
+{% block content %}
+<div class="pagehead"><div><h1>Blocking rules</h1><div class="sub">Messages matching a rule are recorded but not forwarded or paid out.</div></div></div>
+<div class="grid2">
+<form method="post" class="card stack">{% csrf_token %}<h2>Add a rule</h2>{% include "partials/form.html" %}<div><button class="btn primary">Add rule</button></div></form>
+<div class="card"><h2>Rules</h2><div class="tablewrap"><table><thead><tr><th>Type</th><th>Value</th><th>Applies to</th><th>Reason</th><th></th></tr></thead><tbody>
+{% for r in rules %}<tr><td>{{ r.get_rule_type_display }}</td><td class="mono">{{ r.value }}</td><td>{{ r.account|default:"Everyone" }}</td><td class="muted">{{ r.reason }}</td>
+<td><form method="post">{% csrf_token %}<button class="btn sm danger" name="delete" value="{{ r.pk }}">Remove</button></form></td></tr>
+{% empty %}<tr><td colspan="5" class="empty">No rules.</td></tr>{% endfor %}</tbody></table></div></div>
+</div>
+{% endblock %}

@@ -1,0 +1,13 @@
+{% extends "base.html" %}
+{% block title %}Bind status{% endblock %}
+{% block content %}
+<div class="pagehead"><div><h1>Bind status</h1><div class="sub">Refreshed every minute from the SMPP gateway</div></div></div>
+<div class="card"><h2>Suppliers binding to us (SMPP users)</h2><div class="tablewrap"><table><thead><tr><th>Supplier</th><th>Title</th><th>Username</th><th>Allowed IPs</th><th>Status</th><th>Checked</th></tr></thead><tbody>
+{% for u in smpp_users %}<tr><td><a href="/accounts/{{ u.account_id }}/">{{ u.account }}</a></td><td>{{ u.title }}</td><td class="mono">{{ u.username }}</td><td class="mono">{{ u.ip|default:"any" }}</td>
+<td>{% if not u.enabled %}<span class="pill free">Disabled</span>{% elif u.bound %}<span class="pill ok">Bound</span>{% else %}<span class="pill bad">Not bound</span>{% endif %}</td><td class="mono muted">{{ u.last_status_at|date:"d M H:i"|default:"never" }}</td></tr>
+{% empty %}<tr><td colspan="6" class="empty">No SMPP users.</td></tr>{% endfor %}</tbody></table></div></div>
+<div class="card"><h2>Our binds to suppliers (SMSCs)</h2><div class="tablewrap"><table><thead><tr><th>Supplier</th><th>Title</th><th>Host</th><th>Username</th><th>Status</th><th>Checked</th></tr></thead><tbody>
+{% for s in smscs %}<tr><td><a href="/accounts/{{ s.account_id }}/">{{ s.account }}</a></td><td>{{ s.title }}</td><td class="mono">{{ s.ip }}:{{ s.port }}</td><td class="mono">{{ s.username }}</td>
+<td>{% if not s.enabled %}<span class="pill free">Disabled</span>{% elif s.bound %}<span class="pill ok">Bound</span>{% else %}<span class="pill bad">Not bound</span>{% endif %}</td><td class="mono muted">{{ s.last_status_at|date:"d M H:i"|default:"never" }}</td></tr>
+{% empty %}<tr><td colspan="6" class="empty">No SMSCs.</td></tr>{% endfor %}</tbody></table></div></div>
+{% endblock %}

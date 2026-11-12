@@ -1,0 +1,42 @@
+{% extends "base.html" %}{% load switch %}
+{% block title %}{{ acc }}{% endblock %}
+{% block content %}
+<div class="crumbs"><a href="/accounts/">Suppliers &amp; clients</a> / {{ acc }}</div>
+<div class="pagehead"><div><h1>{{ acc }}</h1><div class="sub">{{ acc.kind }}{% if acc.currency %} · {{ acc.currency }}{% endif %}{% if acc.payment_terms %} · terms {{ acc.payment_terms }}{% endif %}{% if acc.account_manager %} · managed by {{ acc.account_manager }}{% endif %}</div></div>
+<div class="actions">{% if acc.is_supplier %}<a class="btn" href="/billing-groups/new/?supplier={{ acc.pk }}">+ Billing group</a>{% endif %}
+{% if acc.is_client %}<a class="btn" href="/numbers/?client={{ acc.pk }}">Allocated numbers</a>{% endif %}
+<a class="btn" href="/sms/records/?{% if acc.is_client %}client{% else %}supplier{% endif %}={{ acc.pk }}">SMS records</a>
+<a class="btn primary" href="/accounts/{{ acc.pk }}/edit/">Edit account</a></div></div>
+<nav class="tabs">
+  <a href="?tab=connections" class="{% if tab == 'connections' or tab == 'sms' %}on{% endif %}">SMS connections</a>
+  {% if acc.is_supplier %}<a href="?tab=groups" class="{% if tab == 'groups' %}on{% endif %}">Billing groups</a>{% endif %}
+  {% if acc.is_client %}<a href="?tab=numbers" class="{% if tab == 'numbers' %}on{% endif %}">Numbers</a>{% endif %}
+  <a href="?tab=voice" class="{% if tab == 'voice' %}on{% endif %}">Voice</a>
+  <a href="?tab=details" class="{% if tab == 'details' %}on{% endif %}">Contacts &amp; details</a>
+  <a href="?tab=users" class="{% if tab == 'users' %}on{% endif %}">Portal users</a>
+</nav>
+{% if tab == "groups" %}
+<div class="tablewrap"><table><thead><tr><th>Title</th><th>Country</th><th>Routing</th><th>Currency</th><th></th></tr></thead><tbody>
+{% for g in groups %}<tr><td><a href="/numbers/?group={{ g.pk }}">{{ g.title }}</a></td><td>{{ g.country }}</td><td>{{ g.get_routing_type_display }}</td><td>{{ g.currency }}</td><td><a class="btn sm" href="/billing-groups/{{ g.pk }}/edit/">Edit</a></td></tr>
+{% empty %}<tr><td colspan="5" class="empty">No billing groups for this supplier yet.</td></tr>{% endfor %}</tbody></table></div>
+{% elif tab == "numbers" %}
+<div class="tablewrap"><table><thead><tr><th>Number</th><th>Billing group</th><th>Country</th><th>Terms</th><th>Since</th></tr></thead><tbody>
+{% for a in allocations %}<tr><td class="mono">{{ a.number.number|e164 }}</td><td>{{ a.number.billing_group.title }}</td><td>{{ a.number.billing_group.country }}</td><td>{{ a.payment_terms|default:"" }}</td><td class="mono">{{ a.starts_at|date:"Y-m-d" }}</td></tr>
+{% empty %}<tr><td colspan="5" class="empty">No numbers allocated.</td></tr>{% endfor %}</tbody></table></div>
+{% if allocations|length == 200 %}<p class="muted">Showing the first 200. <a href="/numbers/?client={{ acc.pk }}">See all</a>.</p>{% endif %}
+{% elif tab == "users" %}
+<div class="card"><p style="margin-top:0">Client portal logins see only this account's numbers and SMS. Add them in <a href="/admin/auth/user/add/">Users &amp; settings</a>, then set their profile role to "Client portal" and account to {{ acc }}.</p>
+{% for p in users %}<div>{{ p.user.username }} · {{ p.get_role_display }}</div>{% empty %}<p class="muted">No portal users yet.</p>{% endfor %}</div>
+{% else %}
+<div class="grid2">
+{% for p in panels %}{% if p.group == tab or tab == "connections" and p.group == "sms" or tab == "sms" and p.group == "sms" %}
+<section class="card"><div class="panelhead"><h2>{{ p.label }}</h2><a class="btn sm" href="/accounts/{{ acc.pk }}/{{ p.kind }}/new/">+ Add</a></div>
+<div class="tablewrap"><table><thead><tr>{% for c in p.cols %}<th>{{ c|capfirst }}</th>{% endfor %}{% if p.kind == "smpp-user" or p.kind == "smsc" %}<th>Bound</th>{% endif %}<th></th></tr></thead><tbody>
+{% for r in p.rows %}<tr>{% for f in p.fields %}<td>{{ r|attr:f }}</td>{% endfor %}
+{% if p.kind == "smpp-user" or p.kind == "smsc" %}<td>{% if not r.enabled %}<span class="pill free">Disabled</span>{% elif r.bound %}<span class="pill ok">Up</span>{% else %}<span class="pill bad">Down</span>{% endif %}</td>{% endif %}
+<td><a class="btn sm" href="/accounts/{{ acc.pk }}/{{ p.kind }}/{{ r.pk }}/">Edit</a></td></tr>
+{% empty %}<tr><td colspan="8" class="empty">None yet.</td></tr>{% endfor %}</tbody></table></div></section>
+{% endif %}{% endfor %}
+</div>
+{% endif %}
+{% endblock %}

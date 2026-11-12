@@ -1,0 +1,32 @@
+{% extends "base.html" %}{% load switch %}
+{% block title %}Billing groups{% endblock %}
+{% block content %}
+<div class="pagehead"><div><h1>Billing groups</h1><div class="sub">{{ page.paginator.count }} groups</div></div>
+<div class="actions"><a class="btn" href="/numbers/add/">+ Add numbers</a><a class="btn primary" href="/billing-groups/new/">+ New billing group</a></div></div>
+<form class="filters" method="get">
+  <label>Supplier<select name="supplier" id="g-supplier"><option value="">Any</option>{% for s in suppliers %}<option value="{{ s.pk }}" {% if f.supplier == s.pk|stringformat:"s" %}selected{% endif %}>{{ s }}</option>{% endfor %}</select></label>
+  <label>Country<select name="country" id="g-country"><option value="">Any</option>{% for c in countries %}<option value="{{ c.pk }}" {% if f.country == c.pk|stringformat:"s" %}selected{% endif %}>{{ c }}</option>{% endfor %}</select></label>
+  <label>Routing<select name="routing" id="g-routing"><option value="">Any</option><option value="sms" {% if f.routing == "sms" %}selected{% endif %}>SMS</option><option value="voice" {% if f.routing == "voice" %}selected{% endif %}>Voice</option></select></label>
+  <label>Blocked<select name="blocked" id="g-blocked"><option value="">Any</option><option value="0" {% if f.blocked == "0" %}selected{% endif %}>Not blocked</option><option value="1" {% if f.blocked == "1" %}selected{% endif %}>Blocked</option></select></label>
+  <label>Title<input type="text" name="q" id="g-q" value="{{ f.q|default:'' }}"></label>
+  <button class="btn">Filter</button>
+</form>
+<form method="post" id="gform">{% csrf_token %}
+<div class="bulk" id="gbulk" hidden><b id="gcount">0 selected</b><button class="btn" name="action" value="block">Block</button><button class="btn" name="action" value="unblock">Unblock</button></div>
+<div class="tablewrap"><table><thead><tr><th><input type="checkbox" id="g-all" aria-label="Select all"></th><th>Title</th><th>Supplier</th><th>Country</th><th>Network</th><th>Routing</th><th>Currency</th><th class="num">Numbers</th><th class="num">Allocated</th><th class="num">Free</th><th>Status</th><th>Last used</th><th></th></tr></thead><tbody>
+{% for g in page %}<tr><td><input type="checkbox" name="ids" value="{{ g.pk }}" id="g{{ g.pk }}" aria-label="Select {{ g.title }}"></td>
+<td><a href="/numbers/?group={{ g.pk }}">{{ g.title }}</a></td><td>{{ g.supplier }}</td><td>{{ g.country }}</td><td>{{ g.network }}</td><td>{{ g.get_routing_type_display }}</td><td>{{ g.currency }}</td>
+<td class="num mono">{{ g.n_total }}</td><td class="num mono">{{ g.n_alloc }}</td><td class="num mono">{{ g|free }}</td>
+<td>{% if g.blocked %}<span class="pill bad">Blocked</span>{% elif g.active %}<span class="pill ok">Active</span>{% else %}<span class="pill free">Inactive</span>{% endif %}</td>
+<td class="mono muted">{{ g.last_used|date:"Y-m-d"|default:"—" }}</td>
+<td><a class="btn sm" href="/numbers/add/?group={{ g.pk }}">+ Numbers</a> <a class="btn sm" href="/billing-groups/{{ g.pk }}/edit/">Edit</a></td></tr>
+{% empty %}<tr><td colspan="13" class="empty">No billing groups match. Create one for each supplier range.</td></tr>{% endfor %}
+</tbody></table></div></form>
+{% include "partials/pager.html" %}
+{% endblock %}
+{% block scripts %}<script>
+const gb=document.getElementById('gbulk'),gc=document.getElementById('gcount');
+function upd(){const n=document.querySelectorAll('#gform input[name=ids]:checked').length;gb.hidden=!n;gc.textContent=n+' selected'}
+document.getElementById('g-all').addEventListener('change',e=>{document.querySelectorAll('#gform input[name=ids]').forEach(c=>c.checked=e.target.checked);upd()});
+document.getElementById('gform').addEventListener('change',upd);
+</script>{% endblock %}

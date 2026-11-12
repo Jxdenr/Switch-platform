@@ -1,0 +1,59 @@
+# Production-style stack on one server: app, forwarding worker, Postgres, and Jasmin
+# (SMPP gateway) with its Redis and RabbitMQ. Put a TLS proxy (Caddy/nginx) in front of web.
+services:
+  db:
+    image: postgres:16
+    environment:
+      POSTGRES_DB: switch
+      POSTGRES_USER: switch
+      POSTGRES_PASSWORD: ${POSTGRES_PASSWORD}
+    volumes: [pgdata:/var/lib/postgresql/data]
+    restart: unless-stopped
+
+  web:
+    build: .
+    env_file: .env
+    command: sh -c "python manage.py migrate --noinput && python manage.py seed_lookups && gunicorn switch.wsgi:application --bind 0.0.0.0:8000 --workers 3"
+    ports: ["127.0.0.1:8000:8000"]
+    depends_on: [db]
+    restart: unless-stopped
+
+  worker:
+    build: .
+    env_file: .env
+    command: python manage.py forward_pending --loop
+    depends_on: [db, web]
+    restart: unless-stopped
+
+  bindstatus:
+    build: .
+    env_file: .env
+    command: sh -c "while true; do python manage.py sync_jasmin --status || true; sleep 60; done"
+    depends_on: [web, jasmin]
+    restart: unless-stopped
+
+  redis:
+    image: redis:7-alpine
+    restart: unless-stopped
+
+  rabbitmq:
+    image: rabbitmq:3.13-alpine
+    restart: unless-stopped
+
+  jasmin:
+    image: jookies/jasmin:latest  # pin to the exact tag you test with before going live
+    depends_on: [redis, rabbitmq]
+    environment:
+      REDIS_CLIENT_HOST: redis
+      AMQP_BROKER_HOST: rabbitmq
+      SWITCH_INGEST_URL: http://web:8000/ingest/jasmin/?token=${INGEST_TOKEN}
+    ports:
+      - "2775:2775"   # SMPP server: suppliers bind here (open in the firewall to supplier IPs only)
+    volumes:
+      - ./jasmin/mt_interceptor.py:/etc/jasmin/mt_interceptor.py:ro
+      - jasminstore:/etc/jasmin/store
+    restart: unless-stopped
+
+volumes:
+  pgdata:
+  jasminstore:

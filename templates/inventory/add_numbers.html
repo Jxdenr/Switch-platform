@@ -1,0 +1,22 @@
+{% extends "base.html" %}
+{% block title %}Add numbers{% endblock %}
+{% block content %}
+<div class="crumbs"><a href="/numbers/">Numbers</a> / Add</div>
+<div class="pagehead"><div><h1>Add numbers</h1><div class="sub">Numbers go into a billing group, which sets the supplier, country and rates.</div></div></div>
+<form method="post" enctype="multipart/form-data" class="card stack">{% csrf_token %}
+{% if form.non_field_errors %}<ul class="errorlist">{% for e in form.non_field_errors %}<li>{{ e }}</li>{% endfor %}</ul>{% endif %}
+<div class="field"><label for="{{ form.billing_group.id_for_label }}">Billing group</label>{{ form.billing_group }}{% for e in form.billing_group.errors %}<span class="err">{{ e }}</span>{% endfor %}
+<span class="help">No group yet? <a href="/billing-groups/new/">Create a billing group</a> first.</span></div>
+<fieldset class="field" style="border:0;padding:0;margin:0"><legend style="font-weight:600;font-size:13px;margin-bottom:6px">How do you want to add them?</legend>
+{% for r in form.mode %}<label style="display:flex;gap:8px;align-items:center;margin:2px 0">{{ r.tag }} {{ r.choice_label }}</label>{% endfor %}</fieldset>
+<div data-mode="range" class="fieldrow"><div class="field"><label for="{{ form.start.id_for_label }}">First number</label>{{ form.start }}</div>
+<div class="field"><label for="{{ form.quantity.id_for_label }}">Quantity</label>{{ form.quantity }}</div></div>
+<div data-mode="list" class="field"><label for="{{ form.numbers.id_for_label }}">Numbers</label>{{ form.numbers }}<span class="help">{{ form.numbers.help_text }}</span></div>
+<div data-mode="csv" class="field"><label for="{{ form.file.id_for_label }}">CSV file</label>{{ form.file }}<span class="help">{{ form.file.help_text }}</span></div>
+<div><button class="btn primary">Add numbers</button> <a class="btn" href="/numbers/">Cancel</a></div>
+</form>
+{% endblock %}
+{% block scripts %}<script>
+function sync(){const m=(document.querySelector('input[name=mode]:checked')||{}).value||'range';document.querySelectorAll('[data-mode]').forEach(el=>el.hidden=el.dataset.mode!==m)}
+document.querySelectorAll('input[name=mode]').forEach(r=>r.addEventListener('change',sync));sync();
+</script>{% endblock %}

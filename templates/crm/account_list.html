@@ -1,0 +1,18 @@
+{% extends "base.html" %}
+{% block title %}Suppliers & clients{% endblock %}
+{% block content %}
+<div class="pagehead"><div><h1>Suppliers &amp; clients</h1><div class="sub">{{ accounts|length }} accounts</div></div>
+<div class="actions"><a class="btn primary" href="/accounts/new/">+ New account</a></div></div>
+<form class="filters" method="get">
+  <label>Show<select name="kind" id="f-kind" onchange="this.form.submit()"><option value="">All</option>
+    <option value="supplier" {% if kind == "supplier" %}selected{% endif %}>Suppliers</option>
+    <option value="client" {% if kind == "client" %}selected{% endif %}>Clients</option></select></label>
+  <label>Search<input type="text" name="q" id="f-q" value="{{ q }}" placeholder="Name or tag"></label>
+  <button class="btn">Filter</button>
+</form>
+<div class="tablewrap"><table><thead><tr><th>ID</th><th>Name</th><th>Type</th><th>Tags</th><th class="num">Billing groups</th><th class="num">Numbers allocated</th><th>Status</th></tr></thead><tbody>
+{% for a in accounts %}<tr><td class="mono muted">{{ a.pk }}</td><td><a href="/accounts/{{ a.pk }}/">{{ a.title }}</a></td><td>{{ a.kind }}</td><td class="muted">{{ a.tags }}</td>
+<td class="num mono">{{ a.n_groups }}</td><td class="num mono">{{ a.n_numbers }}</td><td>{% if a.active %}<span class="pill ok">Active</span>{% else %}<span class="pill free">Inactive</span>{% endif %}</td></tr>
+{% empty %}<tr><td colspan="7" class="empty">No accounts yet. Create your first supplier or client.</td></tr>{% endfor %}
+</tbody></table></div>
+{% endblock %}
