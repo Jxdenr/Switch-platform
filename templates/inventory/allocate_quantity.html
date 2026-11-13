@@ -1,0 +1,40 @@
+{% extends "base.html" %}{% load switch humanize %}
+{% block title %}Allocate a quantity{% endblock %}
+{% block content %}
+<div class="crumbs"><a href="/numbers/">Numbers</a> / Allocate a quantity</div>
+<div class="pagehead"><div><h1>Allocate a quantity</h1>
+<div class="sub">Give a client the next free numbers from a range in one go. No need to tick them on screen.</div></div></div>
+<form method="post" class="stack" style="max-width:none">{% csrf_token %}
+<section class="card"><h2>Which numbers</h2>
+<div class="grid-form">
+  <div class="field"><label for="id_billing_group">Billing group</label>{{ qform.billing_group }}</div>
+  <div class="field"><label for="id_country">Country</label>{{ qform.country }}</div>
+  <div class="field"><label for="id_quantity">{{ qform.quantity.label }}</label>{{ qform.quantity }}
+    <span class="help"><b id="free-count">{{ n_free|intcomma }}</b> free numbers match. Taken in number order.</span>
+    {% for e in qform.quantity.errors %}<span class="err">{{ e }}</span>{% endfor %}</div>
+</div></section>
+<section class="card stack"><h2>To whom</h2>
+{% include "partials/form.html" %}
+<details class="more" id="alloc-rules" {% if rules_form.errors %}open{% endif %}><summary>SMS blocking rules / limits for this client <span class="muted">(optional)</span></summary>
+<p class="muted small">These apply to all of the chosen client's numbers. Leave blank to keep the client's rules as they are.</p>
+<div id="client-rules" class="muted small"></div>
+{% with form=rules_form %}{% include "partials/form.html" %}{% endwith %}
+</details></section>
+<div><button class="btn primary" id="go">Allocate</button> <a class="btn" href="/numbers/">Cancel</a>
+<span class="muted small">Afterwards you'll see just these numbers, ready to export.</span></div>
+</form>
+{% endblock %}
+{% block scripts %}{{ client_rules|json_script:"client-rules-data" }}{{ free_by_group|json_script:"free-data" }}<script>
+(function(){
+  const rules=JSON.parse(document.getElementById('client-rules-data').textContent),sel=document.getElementById('id_client'),out=document.getElementById('client-rules');
+  function show(){const r=rules[sel.value]||[];out.textContent=sel.value?(r.length?'Already on this client: '+r.join(' · '):'This client has no blocking rules yet.'):'';}
+  if(sel){sel.addEventListener('change',show);show();}
+  const free=JSON.parse(document.getElementById('free-data').textContent);
+  const g=document.getElementById('id_billing_group'),c=document.getElementById('id_country'),u=document.getElementById('id_use_for'),q=document.getElementById('id_quantity'),fc=document.getElementById('free-count'),go=document.getElementById('go');
+  function count(){const use=u?u.value:'both';let n=0;free.forEach(r=>{if(g.value&&String(r.g)!==g.value)return;if(c.value&&String(r.c)!==c.value)return;
+    if(use==='sms'&&r.r==='voice')return;if(use==='voice'&&r.r==='sms')return;n+=r.n});
+    fc.textContent=n.toLocaleString();const want=parseInt(q.value||'0',10);
+    go.textContent=want?'Allocate '+want.toLocaleString()+' number'+(want===1?'':'s'):'Allocate';q.max=n;}
+  [g,c,u,q].forEach(el=>el&&el.addEventListener('input',count));[g,c,u].forEach(el=>el&&el.addEventListener('change',count));count();
+})();
+</script>{% endblock %}

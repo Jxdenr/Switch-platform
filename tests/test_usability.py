@@ -237,3 +237,65 @@ class BillingGroupRulesTests(BillingGroupFormTests):
         data["title"] = "UK A"
         self.client.post(url, data)
         self.assertEqual(list(rules.values_list("rule_type", "value")), [("limit", "20")])
+
+
+class BigAllocationTests(Base):
+    def setUp(self):
+        super().setUp()
+        services.add_numbers(self.group, [str(447800000000 + k) for k in range(3000)])
+
+    def test_allocate_a_quantity_takes_next_free_numbers(self):
+        from inventory.models import Allocation
+        services.allocate(list(Number.objects.order_by("number")[:10]), self.cust, self.terms)
+        other = Account.objects.create(title="Big client", is_client=True)
+        r = self.client.post("/numbers/allocate/", {"billing_group": self.group.pk, "quantity": 2500,
+                                                    "client": other.pk, "use_for": "both",
+                                                    "payment_terms": self.terms.pk})
+        self.assertEqual(r.status_code, 302)
+        self.assertIn("since=", r["Location"])
+        mine = Allocation.objects.filter(client=other, ends_at__isnull=True)
+        self.assertEqual(mine.values("number").distinct().count(), 2500)
+        # the 10 already given to another client were skipped, not moved
+        self.assertEqual(Allocation.objects.filter(client=self.cust, ends_at__isnull=True).count(), 10)
+        # the redirect lists exactly these, and the CSV has them all
+        listing = self.client.get(r["Location"])
+        self.assertEqual(listing.context["page"].paginator.count, 2500)
+        csv_rows = b"".join(self.client.get(r["Location"] + "&export=csv").streaming_content).decode().splitlines()
+        self.assertEqual(len(csv_rows), 2501)
+
+    def test_too_many_is_refused(self):
+        r = self.client.post("/numbers/allocate/", {"quantity": 999999, "client": self.cust.pk, "use_for": "both"})
+        self.assertEqual(r.status_code, 200)
+        self.assertFalse(r.context["qform"].is_valid() and r.context["n_free"] >= 999999)
+
+    def test_page_sizes(self):
+        r = self.client.get("/numbers/?per=1000")
+        self.assertEqual(len(r.context["rows"]), 1000)
+        self.assertContains(r, "Select all")
+        self.assertEqual(self.client.get("/numbers/?per=5000").context["per"], 1000)
+
+    def test_bulk_allocate_is_quick(self):
+        import time
+        nums = list(Number.objects.select_related("billing_group"))
+        t = time.time()
+        created, _ = services.allocate(nums, self.cust, self.terms)
+        self.assertEqual(created, 3000)
+        self.assertLess(time.time() - t, 5)
+
+
+class ClientExportTests(Base):
+    def test_client_export_hides_other_clients_and_suppliers(self):
+        from crm.models import Account as A
+        services.add_numbers(self.group, ["447700900100"])
+        self.group.routing_type = "both"
+        self.group.save()
+        n = list(Number.objects.select_related("billing_group"))
+        services.allocate(n, self.cust, self.terms, channels=["sms"])
+        rival = A.objects.create(title="Rival", is_client=True)
+        services.allocate(n, rival, self.terms, channels=["voice"])
+        u = User.objects.create_user("c2", password="pass-12345678")
+        Profile.objects.update_or_create(user=u, defaults={"role": Profile.ROLE_CLIENT, "account": self.cust})
+        self.client.force_login(u)
+        body = b"".join(self.client.get("/numbers/?export=csv").streaming_content).decode()
+        self.assertNotIn("Rival", body)
+        self.assertNotIn("Sup", body)

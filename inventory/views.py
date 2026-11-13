@@ -6,6 +6,7 @@ from django.core.paginator import Paginator
 from django.db.models import Count, Exists, OuterRef, Q
 from django.http import HttpResponse
 from django.shortcuts import get_object_or_404, redirect, render
+from django.utils import timezone
 from django.views.decorators.http import require_POST
 
 from core.access import client_account, staff_required
@@ -243,6 +244,18 @@ def add_numbers(request):
     return render(request, "inventory/add_numbers.html", {"form": form, "nav": "numbers"})
 
 
+PAGE_SIZES = [10, 50, 200, 500, 1000]
+
+
+def _parse_since(v):
+    from django.utils.dateparse import parse_datetime
+    try:
+        d = parse_datetime(v or "")
+    except ValueError:
+        return None
+    return d if d and timezone.is_aware(d) else (timezone.make_aware(d) if d else None)
+
+
 def _numbers_qs(request):
     active = Allocation.objects.filter(number=OuterRef("pk"), ends_at__isnull=True)
     qs = Number.objects.select_related("billing_group__supplier", "billing_group__country").annotate(
@@ -257,8 +270,10 @@ def _numbers_qs(request):
         qs = qs.filter(billing_group__supplier_id=f["supplier"])
     if f.get("country"):
         qs = qs.filter(billing_group__country_id=f["country"])
+    since = _parse_since(f.get("since"))
     if f.get("client"):
-        qs = qs.filter(allocations__client_id=f["client"], allocations__ends_at__isnull=True)
+        extra = {"allocations__starts_at__gte": since} if since else {}
+        qs = qs.filter(allocations__client_id=f["client"], allocations__ends_at__isnull=True, **extra)
     status = f.get("status")
     if status == "free":
         qs = qs.filter(is_alloc=False, blocked=False)
@@ -280,9 +295,9 @@ def number_list(request):
         return redirect("login")
     qs = _numbers_qs(request)
     if request.GET.get("export") == "csv":
-        return _export_numbers(qs)
+        return _export_numbers(qs, client_account(request.user), request.GET)
     per = request.GET.get("per", "50")
-    per = min(max(int(per), 10), 500) if per.isdigit() else 50
+    per = min(max(int(per), 10), 1000) if per.isdigit() else 50
     page = Paginator(qs, per).get_page(request.GET.get("page"))
     allocs = {}
     for a in (Allocation.objects.filter(number__in=page.object_list, ends_at__isnull=True)
@@ -293,7 +308,10 @@ def number_list(request):
     stats["allocated"] = Allocation.objects.filter(ends_at__isnull=True).values("number").distinct().count()
     stats["free"] = stats["total"] - stats["allocated"] - stats["blocked"]
     return render(request, "inventory/number_list.html", {
-        "page": page, "rows": rows, "f": request.GET, "nav": "numbers", "stats": stats,
+        "page": page, "rows": rows, "f": request.GET, "nav": "numbers", "stats": stats, "per": per,
+        "page_sizes": PAGE_SIZES, "since": _parse_since(request.GET.get("since")),
+        "since_client": Account.objects.filter(pk=request.GET.get("client") or 0).first()
+        if request.GET.get("since") else None,
         "is_client": bool(client_account(request.user)),
         "groups": BillingGroup.objects.select_related("supplier"),
         "suppliers": Account.objects.filter(is_supplier=True),
@@ -302,24 +320,46 @@ def number_list(request):
     })
 
 
-def _export_numbers(qs):
-    resp = HttpResponse(content_type="text/csv")
-    resp["Content-Disposition"] = 'attachment; filename="numbers.csv"'
-    w = csv.writer(resp)
-    w.writerow(["number", "country", "supplier", "billing_group", "usable_for", "status",
-                "sms_client", "voice_client", "terms", "date_allocated"])
+def _export_numbers(qs, own=None, f=None):
+    """CSV of the filtered numbers. Streams, so 100k+ rows don't time out."""
+    from django.http import StreamingHttpResponse
+
+    class Echo:
+        def write(self, v):
+            return v
+
+    name = "numbers"
+    if f and f.get("client"):
+        c = Account.objects.filter(pk=f["client"]).first()
+        name = f"{c.title} numbers" if c else name
+    name += f" {timezone.localdate():%Y-%m-%d}"
+    alloc_qs = Allocation.objects.filter(ends_at__isnull=True, number__in=qs.values("pk"))
+    if own:  # a client sees only its own allocations, never who has the other channel
+        alloc_qs = alloc_qs.filter(client=own)
     allocs = {}
-    for a in Allocation.objects.filter(ends_at__isnull=True).select_related("client", "payment_terms"):
+    for a in alloc_qs.select_related("client", "payment_terms").iterator(chunk_size=5000):
         allocs.setdefault(a.number_id, {})[a.channel] = a
-    for n in qs.iterator(chunk_size=2000):
-        a = allocs.get(n.pk, {})
-        first = a.get("sms") or a.get("voice")
-        w.writerow([n.number, n.billing_group.country, n.billing_group.supplier, n.billing_group.title,
-                    n.billing_group.get_routing_type_display(),
-                    "blocked" if n.blocked else ("allocated" if a else "free"),
-                    a["sms"].client if "sms" in a else "", a["voice"].client if "voice" in a else "",
-                    first.payment_terms or "" if first else "", first.starts_at.date() if first else ""])
+    w = csv.writer(Echo())
+
+    def rows():
+        yield w.writerow(["number", "country", "supplier" if not own else "", "billing_group", "usable_for",
+                          "status", "sms_client", "voice_client", "terms", "date_allocated"])
+        for n in qs.iterator(chunk_size=2000):
+            yield from _export_row(w, n, allocs.get(n.pk, {}), own)
+
+    resp = StreamingHttpResponse(rows(), content_type="text/csv")
+    resp["Content-Disposition"] = f'attachment; filename="{name}.csv"'
     return resp
+
+
+def _export_row(w, n, a, own):
+    first = a.get("sms") or a.get("voice")
+    yield w.writerow([n.number, n.billing_group.country, "" if own else n.billing_group.supplier,
+                      n.billing_group.title, n.billing_group.get_routing_type_display(),
+                      "blocked" if n.blocked else ("allocated" if a else "free"),
+                      a["sms"].client if "sms" in a else "", a["voice"].client if "voice" in a else "",
+                      first.payment_terms or "" if first else "", first.starts_at.date() if first else ""])
+
 
 
 CHANNEL_CHOICES = [("both", "SMS & voice (whatever each number supports)"), ("sms", "SMS only"),
@@ -380,6 +420,7 @@ def bulk_action(request):
             if d["rate_out"] is not None:
                 rates = [dict(slot=1, payment_terms=d["payment_terms"], time_of_day=d["time_of_day"],
                               rate_out=d["rate_out"])]
+            started = timezone.now()
             created, moved = services.allocate(numbers, d["client"], d["payment_terms"], d["all_terms"], rates,
                                                d["service"], channels=_channels(d["use_for"]), user=request.user)
             msg = f"Allocated {created:,} numbers to {d['client']}."
@@ -393,7 +434,9 @@ def bulk_action(request):
                 if n:
                     msg += f" Updated {n} blocking rule{'s' if n != 1 else ''} for {d['client']}."
             messages.success(request, msg)
-            return redirect(back)
+            from urllib.parse import urlencode
+            return redirect("/numbers/?" + urlencode({"client": d["client"].pk, "since": started.isoformat(),
+                                                      "per": 200}))
         already = sum(1 for n in numbers if n.current_allocation)
         client_rules = {}
         for r in BlockRule.objects.filter(scope=BlockRule.CLIENT).select_related("account"):
@@ -426,3 +469,75 @@ def bulk_action(request):
             msg += f" Kept {kept:,} that have SMS history (block them instead)."
         messages.success(request, msg)
     return redirect(back)
+
+
+class QuantityForm(forms.Form):
+    billing_group = forms.ModelChoiceField(BillingGroup.objects.select_related("supplier"), required=False,
+                                           empty_label="Any billing group")
+    country = forms.ModelChoiceField(Country.objects.filter(billinggroup__isnull=False).distinct(), required=False,
+                                     empty_label="Any country")
+    quantity = forms.IntegerField(min_value=1, max_value=200000, label="How many numbers",
+                                  widget=forms.NumberInput(attrs={"placeholder": "e.g. 5000"}))
+
+
+def _free_numbers(group=None, country=None, use_for="both"):
+    active = Allocation.objects.filter(number=OuterRef("pk"), ends_at__isnull=True)
+    qs = Number.objects.filter(blocked=False).annotate(is_alloc=Exists(active)).filter(is_alloc=False)
+    if group:
+        qs = qs.filter(billing_group=group)
+    if country:
+        qs = qs.filter(billing_group__country=country)
+    if use_for == "sms":
+        qs = qs.filter(billing_group__routing_type__in=["sms", "both"])
+    elif use_for == "voice":
+        qs = qs.filter(billing_group__routing_type__in=["voice", "both"])
+    return qs.select_related("billing_group").order_by("number")
+
+
+@staff_required
+def allocate_quantity(request):
+    """Allocate the next N free numbers (optionally from one billing group or country) in one go."""
+    from sms.models import BlockRule
+    from sms import rules as R
+    data = request.POST if request.method == "POST" else None
+    qform = QuantityForm(data, initial={"billing_group": request.GET.get("group") or None,
+                                        "country": request.GET.get("country") or None})
+    form = AllocateForm(data)
+    rules_form = R.QuickRulesForm(data, prefix="rules")
+    g = qform["billing_group"].value()
+    c = qform["country"].value()
+    use_for = form["use_for"].value() or "both"
+    free = _free_numbers(BillingGroup.objects.filter(pk=g or 0).first(), Country.objects.filter(pk=c or 0).first(),
+                         use_for)
+    n_free = free.count()
+    if data is not None and qform.is_valid() and form.is_valid() and rules_form.is_valid():
+        qty = qform.cleaned_data["quantity"]
+        if qty > n_free:
+            qform.add_error("quantity", f"Only {n_free:,} free numbers match. Lower the amount or widen the range.")
+        else:
+            d = form.cleaned_data
+            rates = None
+            if d["rate_out"] is not None:
+                rates = [dict(slot=1, payment_terms=d["payment_terms"], time_of_day=d["time_of_day"],
+                              rate_out=d["rate_out"])]
+            started = timezone.now()
+            created, _ = services.allocate(list(free[:qty]), d["client"], d["payment_terms"], d["all_terms"], rates,
+                                           d["service"], channels=_channels(d["use_for"]), user=request.user)
+            if any(rules_form.cleaned_data.get(k) for k in ("limit", "senders", "prefixes")):
+                if not rules_form.cleaned_data.get("limit"):
+                    rules_form.cleaned_data["limit"] = R.initial_limit(BlockRule.CLIENT, account=d["client"])
+                R.save_quick(rules_form, BlockRule.CLIENT, account=d["client"], reason="Set when allocating")
+            messages.success(request, f"Allocated {created:,} numbers to {d['client']}.")
+            from urllib.parse import urlencode
+            return redirect("/numbers/?" + urlencode({"client": d["client"].pk, "since": started.isoformat(),
+                                                      "per": 200}))
+    client_rules = {}
+    for r in BlockRule.objects.filter(scope=BlockRule.CLIENT):
+        client_rules.setdefault(r.account_id, []).append(str(r))
+    free_by_group = [{"g": r["billing_group_id"], "c": r["billing_group__country_id"],
+                      "r": r["billing_group__routing_type"], "n": r["n"]}
+                     for r in _free_numbers().order_by().values("billing_group_id", "billing_group__country_id",
+                                                                "billing_group__routing_type").annotate(n=Count("pk"))]
+    return render(request, "inventory/allocate_quantity.html", {
+        "qform": qform, "form": form, "rules_form": rules_form, "n_free": n_free, "nav": "numbers",
+        "client_rules": client_rules, "free_by_group": free_by_group})

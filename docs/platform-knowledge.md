@@ -63,6 +63,12 @@ assistant's instructions, so keep it accurate whenever behaviour changes.
 - Default view: one rate per channel the range is used for (SMS per message, voice per minute), with payment terms. "+ Add more payment terms or time-of-day rates" opens extra rows one at a time.
 - "Voice rules / limits": billing blocks (60/60 = per minute, 1/1 = per second), minimum and maximum billed, max concurrent calls, ACD and ASR targets.
 
+## Allocating in bulk
+- Numbers page: the toolbar is always shown; tick "Select all" for the page, then "Select all N matching" for every filtered number. Page size 10/50/200/500/1000.
+- "Allocate a quantity": pick a billing group and/or country and a number (e.g. 5000); the next free numbers in number order go to the client. Already-allocated and blocked numbers are skipped.
+- After any allocation the list shows just the numbers allocated, with a "Download them as CSV" link. Export CSV always exports every number matching the filters, not just the page.
+- 10,000 numbers allocate in about 1–2 seconds.
+
 ## Number upload
 - Local numbers (e.g. 07700 900123) get the billing group's country code. Excel scientific notation (4.47E+11) is refused. Numbers from another country need a tick. Skipped lines are listed.
 

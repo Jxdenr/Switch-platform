@@ -57,6 +57,7 @@ Open http://127.0.0.1:8000 and sign in. Run the tests with `python manage.py tes
 | Supplier HTTP bind (`/api/sms/inbound/`), client HTTP delivery | Done, tested |
 | Statements tab, monthly invoices (suppliers) and statements (clients), auto email | Done, tested |
 | Dashboard: due in/out per currency, traffic, delivery rate (ASR/ACD for voice), unrouted traffic, top suppliers/clients | Done, tested |
+| Bulk allocation: allocate a quantity (e.g. next 5,000 free), select all matching, page size up to 1,000, streaming CSV export | Done, tested (10k in ~1.5s on SQLite) |
 | Blocking rules/limits per supplier, client or billing group, set from the group form or allocate step | Done, tested |
 | Client portal: dashboard with their numbers and delivery health, Statements page (own statements + volumes) | Done, tested |
 | Jasmin sync for binds we make out to supplier SMSCs (`sync_jasmin`) | Written, **needs testing against a live Jasmin** |

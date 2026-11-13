@@ -2,7 +2,8 @@
 {% block title %}Numbers{% endblock %}
 {% block content %}
 <div class="pagehead"><div><h1>Numbers</h1><div class="sub">{{ page.paginator.count|intcomma }} match these filters</div></div>
-<div class="actions"><a class="btn" href="?{% qs_without 'page' %}&export=csv">Export CSV</a>{% if not is_client %}<a class="btn primary" href="/numbers/add/{% if f.group %}?group={{ f.group }}{% endif %}">+ Add numbers</a>{% endif %}</div></div>
+<div class="actions"><a class="btn" href="?{% qs_without 'page' %}&export=csv">Export {{ page.paginator.count|intcomma }} to CSV</a>{% if not is_client %}<a class="btn" href="/numbers/allocate/{% if f.group or f.country %}?group={{ f.group|default:'' }}&amp;country={{ f.country|default:'' }}{% endif %}">Allocate a quantity</a><a class="btn primary" href="/numbers/add/{% if f.group %}?group={{ f.group }}{% endif %}">+ Add numbers</a>{% endif %}</div></div>
+{% if since %}<div class="flash">Showing the {{ page.paginator.count|intcomma }} numbers allocated to {{ since_client }} since {{ since|date:"d M H:i" }}. <a href="?{% qs_without 'page' %}&export=csv"><b>Download them as CSV</b></a> · <a href="/numbers/?client={{ f.client }}">All of {{ since_client }}'s numbers</a></div>{% endif %}
 {% if not is_client %}<div class="kpis"><div class="kpi"><b>Total</b><span>{{ stats.total|intcomma }}</span></div><div class="kpi"><b>Allocated</b><span>{{ stats.allocated|intcomma }}</span></div><div class="kpi"><b>Free</b><span>{{ stats.free|intcomma }}</span></div><div class="kpi"><b>Blocked</b><span>{{ stats.blocked|intcomma }}</span></div></div>{% endif %}
 <form class="filters" method="get">
   {% if not is_client %}<label>Supplier<select name="supplier" id="n-supplier"><option value="">Any</option>{% for s in suppliers %}<option value="{{ s.pk }}" {% if f.supplier == s.pk|stringformat:"s" %}selected{% endif %}>{{ s }}</option>{% endfor %}</select></label>
@@ -18,15 +19,19 @@
 <form method="post" action="/numbers/bulk/" id="nform">{% csrf_token %}
 <input type="hidden" name="back" value="{{ request.get_full_path }}">
 <input type="hidden" name="f_group" value="{{ f.group|default:'' }}"><input type="hidden" name="f_supplier" value="{{ f.supplier|default:'' }}"><input type="hidden" name="f_country" value="{{ f.country|default:'' }}"><input type="hidden" name="f_client" value="{{ f.client|default:'' }}"><input type="hidden" name="f_status" value="{{ f.status|default:'' }}"><input type="hidden" name="f_q" value="{{ f.q|default:'' }}"><input type="hidden" name="f_routing" value="{{ f.routing|default:'' }}">
-{% if not is_client %}<div class="bulk" id="nbulk" hidden><b id="ncount">0 selected</b>
-  <label id="allwrap" hidden><input type="checkbox" name="select_all_matching" value="1" id="n-allmatch"> All {{ page.paginator.count|intcomma }} matching</label>
-  <button class="btn primary" name="action" value="allocate">Allocate to client</button>
-  <button class="btn" name="action" value="unallocate">Unallocate</button>
-  <button class="btn" name="action" value="move">Move group</button>
-  <button class="btn" name="action" value="block">Block</button>
-  <button class="btn" name="action" value="unblock">Unblock</button>
-  <button class="btn" name="action" value="delete">Delete</button></div>{% endif %}
-<div class="tablewrap"><table><thead><tr>{% if not is_client %}<th><input type="checkbox" id="n-all" aria-label="Select all on this page"></th>{% endif %}<th>Number</th><th>Country</th>{% if not is_client %}<th>Supplier</th>{% endif %}<th>Billing group</th><th>Usable for</th><th>Status</th><th>Allocated to</th><th>Terms</th><th>Date allocated</th></tr></thead><tbody>
+<div class="toolbar">
+  {% if not is_client %}<span class="tb-count"><b id="ncount">0 selected</b>
+  <label id="allwrap" hidden><input type="checkbox" name="select_all_matching" value="1" id="n-allmatch"> Select all {{ page.paginator.count|intcomma }} matching</label></span>
+  <span class="tb-actions">
+  <button class="btn sm primary" name="action" value="allocate" data-needs-sel disabled>Allocate to client</button>
+  <button class="btn sm" name="action" value="unallocate" data-needs-sel disabled>Unallocate</button>
+  <button class="btn sm" name="action" value="move" data-needs-sel disabled>Move group</button>
+  <button class="btn sm" name="action" value="block" data-needs-sel disabled>Block</button>
+  <button class="btn sm" name="action" value="unblock" data-needs-sel disabled>Unblock</button>
+  <button class="btn sm danger" name="action" value="delete" data-needs-sel disabled>Delete</button></span>{% endif %}
+  <label class="tb-per">Show <select id="n-per" aria-label="Numbers per page">{% for n in page_sizes %}<option value="{{ n }}" {% if n == per %}selected{% endif %}>{{ n }}</option>{% endfor %}</select> per page</label>
+</div>
+<div class="tablewrap"><table><thead><tr>{% if not is_client %}<th class="selall"><label><input type="checkbox" id="n-all"> Select all</label></th>{% endif %}<th>Number</th><th>Country</th>{% if not is_client %}<th>Supplier</th>{% endif %}<th>Billing group</th><th>Usable for</th><th>Status</th><th>Allocated to</th><th>Terms</th><th>Date allocated</th></tr></thead><tbody>
 {% for n, allocs in rows %}<tr>{% if not is_client %}<td><input type="checkbox" name="ids" value="{{ n.pk }}" id="n{{ n.pk }}" aria-label="Select {{ n }}"></td>{% endif %}
 <td class="mono">{{ n.number|e164 }}</td><td>{{ n.billing_group.country }}</td>{% if not is_client %}<td>{{ n.billing_group.supplier }}</td>{% endif %}<td>{{ n.billing_group.title }}</td><td>{{ n.billing_group.get_routing_type_display }}</td>
 <td>{% if n.blocked %}<span class="pill bad">Blocked</span>{% elif allocs %}<span class="pill ok">Allocated</span>{% else %}<span class="pill free">Free</span>{% endif %}</td>
@@ -37,11 +42,17 @@
 {% include "partials/pager.html" %}
 {% endblock %}
 {% block scripts %}<script>
-const nb=document.getElementById('nbulk'),nc=document.getElementById('ncount'),aw=document.getElementById('allwrap'),am=document.getElementById('n-allmatch');
-function upd(){if(!nb)return;const boxes=[...document.querySelectorAll('#nform input[name=ids]')],n=boxes.filter(c=>c.checked).length;
- nb.hidden=!n&&!(am&&am.checked);nc.textContent=(am&&am.checked)?'All matching selected':n+' selected';
+(function(){
+const nc=document.getElementById('ncount'),aw=document.getElementById('allwrap'),am=document.getElementById('n-allmatch'),total={{ page.paginator.count }};
+function upd(){const boxes=[...document.querySelectorAll('#nform input[name=ids]')],n=boxes.filter(c=>c.checked).length,allm=am&&am.checked;
+ if(nc)nc.textContent=allm?'All '+total.toLocaleString()+' selected':n.toLocaleString()+' selected';
+ document.querySelectorAll('[data-needs-sel]').forEach(b=>b.disabled=!(n||allm));
  document.querySelectorAll('#nform tbody tr').forEach(tr=>{const c=tr.querySelector('input[name=ids]');tr.classList.toggle('sel',!!(c&&c.checked))});
- if(aw)aw.hidden=!(boxes.length&&n===boxes.length&&{{ page.paginator.count }}>boxes.length)}
+ if(aw)aw.hidden=!(boxes.length&&n===boxes.length&&total>boxes.length);
+ const all=document.getElementById('n-all');if(all){all.checked=boxes.length&&n===boxes.length;all.indeterminate=n>0&&n<boxes.length}}
 const all=document.getElementById('n-all');if(all)all.addEventListener('change',e=>{document.querySelectorAll('#nform input[name=ids]').forEach(c=>c.checked=e.target.checked);if(!e.target.checked&&am)am.checked=false;upd()});
 document.getElementById('nform').addEventListener('change',upd);
+document.getElementById('n-per').addEventListener('change',e=>{const u=new URL(location.href);u.searchParams.set('per',e.target.value);u.searchParams.delete('page');location.href=u});
+upd();
+})();
 </script>{% endblock %}

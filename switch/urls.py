@@ -36,6 +36,7 @@ urlpatterns = [
     path("numbers/", inv.number_list, name="number_list"),
     path("numbers/add/", inv.add_numbers, name="add_numbers"),
     path("numbers/bulk/", inv.bulk_action, name="number_bulk"),
+    path("numbers/allocate/", inv.allocate_quantity, name="allocate_quantity"),
     # SMS
     path("sms/records/", sms.records, name="sms_records"),
     path("sms/ticker/", sms.ticker, name="sms_ticker"),

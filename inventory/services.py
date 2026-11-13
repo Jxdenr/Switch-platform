@@ -120,24 +120,47 @@ def allocate(numbers, client, payment_terms=None, all_terms=False, rates=None, s
     rates: list of dicts {slot, payment_terms, time_of_day, rate_out}, applied to every channel.
     If empty, the billing group's default rate_out for that channel and terms is used.
     Returns (numbers allocated, allocations moved from another client or channel holder).
+
+    Works in bulk (a handful of queries per 2,000 numbers) so 10k+ numbers allocate in seconds.
     """
     now = timezone.now()
-    numbers = list(numbers)
-    created = moved = 0
+    plan = []  # (number, [channels])
     for num in numbers:
         if num.blocked:
             continue
         chans = [c for c in (channels or num.billing_group.channels) if c in num.billing_group.channels]
-        if not chans:
-            continue
-        moved += Allocation.objects.filter(number=num, channel__in=chans, ends_at__isnull=True).update(ends_at=now)
-        for ch in chans:
-            a = Allocation.objects.create(number=num, client=client, channel=ch, payment_terms=payment_terms,
-                                          all_terms=all_terms, service=service if ch == VOICE else "",
-                                          starts_at=now, min_duration=min_duration, max_duration=max_duration)
-            chosen = rates or _default_rates(num.billing_group, payment_terms, all_terms, ch)
-            AllocationRate.objects.bulk_create([AllocationRate(allocation=a, **r) for r in chosen])
-        created += 1
+        if chans:
+            plan.append((num, chans))
+    moved = 0
+    default_cache = {}
+    for i in range(0, len(plan), 2000):
+        chunk = plan[i:i + 2000]
+        for ch in (SMS, VOICE):
+            ids = [n.pk for n, chans in chunk if ch in chans]
+            if ids:
+                moved += Allocation.objects.filter(number_id__in=ids, channel=ch, ends_at__isnull=True).update(ends_at=now)
+        new = [Allocation(number=num, client=client, channel=ch, payment_terms=payment_terms, all_terms=all_terms,
+                          service=service if ch == VOICE else "", starts_at=now, min_duration=min_duration,
+                          max_duration=max_duration)
+               for num, chans in chunk for ch in chans]
+        Allocation.objects.bulk_create(new)
+        if not all(a.pk for a in new):  # database can't return ids from bulk insert
+            lookup = {(a.number_id, a.channel): a.pk for a in Allocation.objects.filter(
+                number_id__in=[n.pk for n, _ in chunk], ends_at__isnull=True, starts_at=now)}
+            for a in new:
+                a.pk = lookup[(a.number_id, a.channel)]
+        rate_rows = []
+        for a in new:
+            if rates:
+                chosen = rates
+            else:
+                key = (a.number.billing_group_id, a.channel)
+                if key not in default_cache:
+                    default_cache[key] = _default_rates(a.number.billing_group, payment_terms, all_terms, a.channel)
+                chosen = default_cache[key]
+            rate_rows += [AllocationRate(allocation_id=a.pk, **r) for r in chosen]
+        AllocationRate.objects.bulk_create(rate_rows, batch_size=2000)
+    created = len(plan)
     log(user, "numbers.allocate", client, via=via, allocated=created, channels=channels or "group default",
         moved=moved)
     return created, moved
