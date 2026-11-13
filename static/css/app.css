@@ -206,3 +206,7 @@ table.rates.simple .adv{display:none}table.rates td.adv:last-child{white-space:n
 .curnote{margin:10px 0 0}
 .stat b{grid-column:1;grid-row:1}.stat .delta{grid-column:2;grid-row:1;justify-self:end}.stat .v{grid-column:1/-1}
 @media (max-width:760px){.search{flex:1 1 140px;min-width:0}.statrow{grid-template-columns:repeat(2,minmax(0,1fr));gap:10px}.stat .v{font-size:22px}.stat .v.traffic{font-size:17px;white-space:normal}}
+table.rules-mini{width:100%;margin-top:10px;border-collapse:collapse}table.rules-mini td{padding:6px 8px 6px 0;border-bottom:1px solid var(--line)}
+details.more .field{margin-top:12px}details.more>p{margin:8px 0 0}
+.rules-grid{grid-template-columns:minmax(0,1.7fr) minmax(300px,1fr)}@media (max-width:900px){.rules-grid{grid-template-columns:1fr}}
+.rules-grid td{white-space:normal}.rules-grid td:last-child{width:1%;white-space:nowrap}

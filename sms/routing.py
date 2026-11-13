@@ -79,7 +79,8 @@ def receive(*, source, destination, body, origin_connector="", smpp_username="",
             if not msg.http_endpoint:
                 msg.client_bind = allocation.client.smpp_users.filter(enabled=True, role=SmppUser.CLIENT).first()
 
-    rule = BlockRule.blocks(msg.source, dest, msg.client)
+    rule = BlockRule.blocks(msg.source, dest, msg.client, msg.supplier, msg.billing_group, msg.received_at)
+    msg.block_rule = rule
     if rule or (number and number.blocked):
         msg.status = Message.BLOCKED
         msg.last_error = f"Blocked by rule: {rule}" if rule else "Number is blocked"

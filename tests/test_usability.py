@@ -150,3 +150,90 @@ class ClientPortalTests(Base):
         r = self.client.get("/")
         self.assertContains(r, "Your account")
         self.assertNotContains(r, "Unrouted")
+
+
+class BlockRuleScopeTests(Base):
+    def setUp(self):
+        super().setUp()
+        from crm.models import HttpEndpoint
+        HttpEndpoint.objects.create(account=self.cust, title="hook", url="https://example.com/hook")
+        services.add_numbers(self.group, ["447700900100", "447700900101"])
+        services.allocate(list(Number.objects.all()), self.cust, self.terms)
+        self.other_sup = Account.objects.create(title="Other sup", is_supplier=True)
+        self.other_group = BillingGroup.objects.create(supplier=self.other_sup, title="UK B", country=self.uk,
+                                                       currency=self.gbp)
+
+    def receive(self, to="447700900100", sender="ShopCo"):
+        from sms.routing import receive
+        return receive(source=sender, destination=to, body="hi")
+
+    def test_supplier_rule_applies_to_that_suppliers_traffic(self):
+        from sms.models import BlockRule
+        BlockRule.objects.create(scope=BlockRule.SUPPLIER, account=self.supplier, rule_type="sender", value="shopco")
+        m = self.receive()
+        self.assertEqual(m.status, Message.BLOCKED)
+        self.assertIsNotNone(m.block_rule)
+        BlockRule.objects.update(account=self.other_sup)
+        self.assertNotEqual(self.receive().status, Message.BLOCKED)
+
+    def test_group_and_client_rules(self):
+        from sms.models import BlockRule
+        r = BlockRule.objects.create(scope=BlockRule.GROUP, billing_group=self.other_group, rule_type="prefix",
+                                     value="4477")
+        self.assertNotEqual(self.receive().status, Message.BLOCKED)
+        r.billing_group = self.group
+        r.save()
+        self.assertEqual(self.receive().status, Message.BLOCKED)
+        r.delete()
+        BlockRule.objects.create(scope=BlockRule.CLIENT, account=self.cust, rule_type="number", value="447700900101")
+        self.assertEqual(self.receive("447700900101").status, Message.BLOCKED)
+        self.assertNotEqual(self.receive("447700900100").status, Message.BLOCKED)
+
+    def test_limit_per_number_per_hour(self):
+        from sms.models import BlockRule
+        BlockRule.objects.create(scope=BlockRule.ALL, rule_type="limit", value="2")
+        statuses = [self.receive().status for _ in range(3)]
+        self.assertNotEqual(statuses[1], Message.BLOCKED)
+        self.assertEqual(statuses[2], Message.BLOCKED)
+        self.assertNotEqual(self.receive("447700900101").status, Message.BLOCKED)  # other numbers unaffected
+
+    def test_rules_from_allocate_step(self):
+        from sms.models import BlockRule
+        ids = list(Number.objects.values_list("pk", flat=True))
+        self.client.post("/numbers/bulk/", {"action": "allocate", "confirm": "1", "ids": ids, "client": self.cust.pk,
+                                            "payment_terms": self.terms.pk, "use_for": "both",
+                                            "rules-limit": "15", "rules-senders": "SpamCo, Junk"})
+        rules = BlockRule.objects.filter(scope=BlockRule.CLIENT, account=self.cust)
+        self.assertEqual(sorted(rules.values_list("rule_type", "value")),
+                         [("limit", "15"), ("sender", "Junk"), ("sender", "SpamCo")])
+        # allocating again with the limit left blank keeps it
+        self.client.post("/numbers/bulk/", {"action": "allocate", "confirm": "1", "ids": ids, "client": self.cust.pk,
+                                            "payment_terms": self.terms.pk, "use_for": "both", "rules-senders": "Junk"})
+        self.assertTrue(rules.filter(rule_type="limit", value="15").exists())
+        self.assertEqual(rules.count(), 3)
+
+    def test_blocking_page_needs_a_target(self):
+        from sms.models import BlockRule
+        r = self.client.post("/sms/blocking/", {"scope": "supplier", "rule_type": "sender", "value": "X"})
+        self.assertEqual(r.status_code, 200)
+        self.assertFalse(BlockRule.objects.exists())
+        self.client.post("/sms/blocking/", {"scope": "group", "billing_group": self.group.pk, "rule_type": "limit",
+                                            "value": "10"})
+        self.assertTrue(BlockRule.objects.filter(scope="group", billing_group=self.group, account=None).exists())
+        self.assertEqual(self.client.get("/sms/blocking/?scope=group").status_code, 200)
+
+
+class BillingGroupRulesTests(BillingGroupFormTests):
+    def test_group_form_saves_and_removes_rules(self):
+        from sms.models import BlockRule
+        url = f"/billing-groups/{self.group.pk}/edit/"
+        _, data = self.form_data(url, **{"rules-limit": "20", "rules-prefixes": "+44 7700 900"})
+        data["title"] = "UK A"
+        self.assertEqual(self.client.post(url, data).status_code, 302)
+        rules = BlockRule.objects.filter(scope="group", billing_group=self.group)
+        self.assertEqual(sorted(rules.values_list("rule_type", "value")), [("limit", "20"), ("prefix", "447700900")])
+        prefix = rules.get(rule_type="prefix")
+        _, data = self.form_data(url, remove_rule=[prefix.pk], **{"rules-limit": "20"})
+        data["title"] = "UK A"
+        self.client.post(url, data)
+        self.assertEqual(list(rules.values_list("rule_type", "value")), [("limit", "20")])

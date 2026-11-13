@@ -151,10 +151,18 @@ def group_edit(request, pk=None):
         form.initial.setdefault("currency", sup.currency_id)
     rates = _rate_formset(request.POST or None, obj or BillingGroup(), default_terms)
     rates.routing_type = request.POST.get("routing_type") if request.method == "POST" else None
-    if request.method == "POST" and form.is_valid() and rates.is_valid():
+    from sms.models import BlockRule
+    from sms import rules as R
+    group_rules = R.rules_for(BlockRule.GROUP, group=obj).exclude(rule_type=BlockRule.LIMIT) if obj else []
+    rules_form = R.QuickRulesForm(request.POST or None, prefix="rules",
+                                  initial={"limit": R.initial_limit(BlockRule.GROUP, group=obj)} if obj else None)
+    if request.method == "POST" and form.is_valid() and rates.is_valid() and rules_form.is_valid():
         g = form.save()
         rates.instance = g
         rates.save()
+        BlockRule.objects.filter(scope=BlockRule.GROUP, billing_group=g,
+                                 pk__in=request.POST.getlist("remove_rule")).delete()
+        R.save_quick(rules_form, BlockRule.GROUP, group=g, reason="Set on billing group")
         from core.models import log
         log(request.user, "billing_group.save", g)
         messages.success(request, f"Saved billing group “{g.title}”.")
@@ -162,7 +170,8 @@ def group_edit(request, pk=None):
     voice_fields = [form[n] for n in ("billing_increment_first", "billing_increment_next", "min_duration", "max_duration",
                                       "concurrent_limit", "acd", "asr")]
     return render(request, "inventory/group_form.html", {"form": form, "rates": rates, "obj": obj, "nav": "groups",
-                                                         "voice_fields": voice_fields})
+                                                         "voice_fields": voice_fields, "rules_form": rules_form,
+                                                         "group_rules": group_rules})
 
 
 @staff_required
@@ -360,8 +369,12 @@ def bulk_action(request):
         return redirect(back)
 
     if action == "allocate":
-        form = AllocateForm(request.POST if request.POST.get("confirm") else None)
-        if form.is_valid():
+        from sms.models import BlockRule
+        from sms import rules as R
+        confirm = bool(request.POST.get("confirm"))
+        form = AllocateForm(request.POST if confirm else None)
+        rules_form = R.QuickRulesForm(request.POST if confirm else None, prefix="rules")
+        if form.is_valid() and rules_form.is_valid():
             d = form.cleaned_data
             rates = None
             if d["rate_out"] is not None:
@@ -372,10 +385,21 @@ def bulk_action(request):
             msg = f"Allocated {created:,} numbers to {d['client']}."
             if moved:
                 msg += f" {moved:,} were moved from another client."
+            if any(rules_form.cleaned_data.get(k) for k in ("limit", "senders", "prefixes")):
+                rules_form.cleaned_data.setdefault("limit", None)
+                if not rules_form.cleaned_data["limit"]:  # blank here means "leave the client's limit as it is"
+                    rules_form.cleaned_data["limit"] = R.initial_limit(BlockRule.CLIENT, account=d["client"])
+                n = R.save_quick(rules_form, BlockRule.CLIENT, account=d["client"], reason="Set when allocating")
+                if n:
+                    msg += f" Updated {n} blocking rule{'s' if n != 1 else ''} for {d['client']}."
             messages.success(request, msg)
             return redirect(back)
         already = sum(1 for n in numbers if n.current_allocation)
+        client_rules = {}
+        for r in BlockRule.objects.filter(scope=BlockRule.CLIENT).select_related("account"):
+            client_rules.setdefault(r.account_id, []).append(str(r))
         return render(request, "inventory/allocate.html", {
+            "rules_form": rules_form, "client_rules": client_rules,
             "form": form, "numbers": numbers[:20], "count": len(numbers), "already": already,
             "carry": _carry(request), "back": back, "nav": "numbers"})
 

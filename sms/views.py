@@ -146,26 +146,71 @@ def resend(request, pk):
 
 
 class BlockRuleForm(forms.ModelForm):
+    supplier = forms.ModelChoiceField(Account.objects.filter(is_supplier=True), required=False, empty_label="Choose supplier")
+    client = forms.ModelChoiceField(Account.objects.filter(is_client=True), required=False, empty_label="Choose client")
+
     class Meta:
         model = BlockRule
-        fields = ["rule_type", "value", "account", "reason"]
+        fields = ["scope", "supplier", "client", "billing_group", "rule_type", "value", "reason"]
+        widgets = {"scope": forms.RadioSelect}
+        labels = {"rule_type": "Rule", "reason": "Reason (optional)"}
+
+    def __init__(self, *a, **kw):
+        super().__init__(*a, **kw)
+        self.fields["billing_group"].empty_label = "Choose billing group"
+        self.fields["billing_group"].queryset = self.fields["billing_group"].queryset.select_related("supplier")
+        self.fields["value"].widget.attrs["placeholder"] = "Sender ID, number, prefix or a number of SMS"
+
+    def clean(self):
+        d = super().clean()
+        scope, kind, value = d.get("scope"), d.get("rule_type"), (d.get("value") or "").strip()
+        need = {BlockRule.SUPPLIER: "supplier", BlockRule.CLIENT: "client", BlockRule.GROUP: "billing_group"}.get(scope)
+        if need and not d.get(need):
+            self.add_error(need, "Choose which one this rule applies to.")
+        if kind == BlockRule.LIMIT and not value.isdigit():
+            self.add_error("value", "For a limit, enter how many SMS one number may receive per hour, e.g. 20.")
+        if kind in (BlockRule.NUMBER, BlockRule.PREFIX):
+            value = value.replace(" ", "").lstrip("+")
+            if not value.isdigit():
+                self.add_error("value", "Numbers and prefixes are digits in international format, e.g. 447700900.")
+        d["value"] = value
+        return d
+
+    def save(self, commit=True):
+        r = super().save(commit=False)
+        d = self.cleaned_data
+        r.account = d.get("supplier") if r.scope == BlockRule.SUPPLIER else d.get("client") if r.scope == BlockRule.CLIENT else None
+        if r.scope != BlockRule.GROUP:
+            r.billing_group = None
+        if commit:
+            r.save()
+        return r
 
 
 @staff_required
 def block_rules(request):
-    form = BlockRuleForm(request.POST or None)
+    form = BlockRuleForm(request.POST or None, initial={"scope": request.GET.get("scope") or BlockRule.ALL})
     if request.method == "POST":
         if request.POST.get("delete"):
             BlockRule.objects.filter(pk=request.POST["delete"]).delete()
             messages.success(request, "Rule removed.")
-            return redirect("block_rules")
+            return redirect(request.get_full_path())
         if form.is_valid():
             r = form.save()
             log(request.user, "block_rule.add", r)
-            messages.success(request, f"Added rule: {r}.")
-            return redirect("block_rules")
-    return render(request, "sms/block_rules.html", {"form": form, "rules": BlockRule.objects.select_related("account"),
-                                                    "nav": "blocking"})
+            messages.success(request, f"Added rule: {r} ({r.target_label()}).")
+            return redirect(request.get_full_path())
+    since = timezone.now() - timedelta(days=30)
+    rules = BlockRule.objects.select_related("account", "billing_group").annotate(
+        n_hits=Count("hits", filter=Q(hits__received_at__gte=since)))
+    scope = request.GET.get("scope")
+    if scope in dict(BlockRule.SCOPES):
+        rules = rules.filter(scope=scope)
+    counts = dict(BlockRule.objects.values_list("scope").annotate(n=Count("pk")))
+    blocked = Message.objects.filter(status=Message.BLOCKED, received_at__gte=since).count()
+    return render(request, "sms/block_rules.html", {
+        "form": form, "rules": rules, "nav": "blocking", "scope": scope, "scopes": BlockRule.SCOPES,
+        "counts": counts, "total": sum(counts.values()), "blocked_30d": blocked})
 
 
 def _int(v):

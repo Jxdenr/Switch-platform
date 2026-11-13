@@ -67,6 +67,7 @@ class Command(BaseCommand):
         self._calls(rnd)
         self._documents()
         self._extras(rnd, suppliers, clients, t3045, all_times)
+        self._rules(suppliers, clients)
         if Message.objects.filter(currency="GBP").exists():
             self.stdout.write("Messages already present, skipping.")
             return
@@ -114,6 +115,19 @@ class Command(BaseCommand):
         for k in range(45):
             receive(source="DemoBank", destination=rnd.choice(free).number, body=f"Unrouted demo {k}",
                     smpp_username="demo0", received_at=now - timedelta(minutes=rnd.randint(0, 60 * 24 * 14)))
+
+    def _rules(self, suppliers, clients):
+        from sms.models import BlockRule
+        if BlockRule.objects.exists():
+            return
+        g = BillingGroup.objects.filter(supplier=suppliers[0]).first()
+        BlockRule.objects.create(scope="all", rule_type="sender", value="SpamCo", reason="Known spam sender")
+        BlockRule.objects.create(scope="supplier", account=suppliers[2], rule_type="limit", value="30",
+                                 reason="Pumping seen in October")
+        BlockRule.objects.create(scope="client", account=clients[1], rule_type="prefix", value="447700900599",
+                                 reason="Client asked to stop this block")
+        BlockRule.objects.create(scope="group", billing_group=g, rule_type="limit", value="20",
+                                 reason="Set on billing group")
 
     def _calls(self, rnd):
         from voice.billing import record_call

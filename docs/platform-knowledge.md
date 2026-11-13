@@ -67,7 +67,10 @@ assistant's instructions, so keep it accurate whenever behaviour changes.
 - Local numbers (e.g. 07700 900123) get the billing group's country code. Excel scientific notation (4.47E+11) is refused. Numbers from another country need a tick. Skipped lines are listed.
 
 ## Blocking rules
-- Rules match a destination number, a destination prefix, or a sender ID (case-insensitive). A rule applies to everyone or to one account.
+- Rules: block a sender ID (case-insensitive), block a destination prefix, block one destination number, or limit SMS per destination number per hour (stops SMS pumping; later SMS in that hour are blocked).
+- Each rule applies to everyone, one supplier (all traffic they send), one client (all their numbers) or one billing group (every number in the range, whichever client has it).
+- Set them where they belong: the billing group form ("SMS blocking rules / limits"), the allocate step (rules for that client), or the Blocking rules page, which lists every rule with how many SMS it blocked in the last 30 days.
+- Blocked SMS are recorded with the rule that blocked them, not forwarded and not paid out.
 
 ## Safety rules for the assistant
 - Read freely within the user's permissions. Before any change, state exactly what will change (counts, client, group) and wait for a yes.

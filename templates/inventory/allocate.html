@@ -1,5 +1,6 @@
 {% extends "base.html" %}{% load switch humanize %}
 {% block title %}Allocate numbers{% endblock %}
+
 {% block content %}
 <div class="crumbs"><a href="{{ back }}">Numbers</a> / Allocate</div>
 <div class="pagehead"><div><h1>Allocate {{ count|intcomma }} number{{ count|pluralize }}</h1>
@@ -8,7 +9,17 @@
 {% for k, v in carry %}<input type="hidden" name="{{ k }}" value="{{ v }}">{% endfor %}
 <input type="hidden" name="action" value="allocate"><input type="hidden" name="confirm" value="1"><input type="hidden" name="back" value="{{ back }}">
 {% include "partials/form.html" %}
+<details class="more" id="alloc-rules" {% if rules_form.errors %}open{% endif %}><summary>SMS blocking rules / limits for this client <span class="muted">(optional)</span></summary>
+<p class="muted small">These apply to all of the chosen client's numbers, not just these ones. Leave blank to keep the client's rules as they are.</p>
+<div id="client-rules" class="muted small"></div>
+{% with form=rules_form %}{% include "partials/form.html" %}{% endwith %}
+</details>
 <div><button class="btn primary">Allocate {{ count|intcomma }} number{{ count|pluralize }}</button> <a class="btn" href="{{ back }}">Cancel</a></div>
 </form>
 <div class="card"><h2>Selected</h2><p class="mono" style="margin:0;white-space:normal">{% for n in numbers %}{{ n.number|e164 }}{% if not forloop.last %}, {% endif %}{% endfor %}{% if count > 20 %} … and {{ count|add:-20|intcomma }} more{% endif %}</p></div>
 {% endblock %}
+{% block scripts %}{{ client_rules|json_script:"client-rules-data" }}<script>
+(function(){const data=JSON.parse(document.getElementById('client-rules-data').textContent),sel=document.getElementById('id_client'),out=document.getElementById('client-rules');
+ function show(){const r=data[sel.value]||[];out.textContent=sel.value?(r.length?'Already on this client: '+r.join(' · '):'This client has no blocking rules yet.'):'';}
+ if(sel){sel.addEventListener('change',show);show();}})();
+</script>{% endblock %}

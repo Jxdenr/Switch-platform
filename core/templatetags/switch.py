@@ -47,3 +47,8 @@ def alloc_summary(allocs):
         v["label"] = "SMS & voice" if len(ch) == 2 else ("SMS" if ch[0] == "sms" else "Voice")
         out.append(v)
     return out
+
+
+@register.filter
+def get_item(d, key):
+    return d.get(key) if hasattr(d, "get") else None

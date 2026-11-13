@@ -36,6 +36,7 @@ class Message(models.Model):
     forwarded_at = models.DateTimeField(null=True, blank=True)
     last_attempt_at = models.DateTimeField(null=True, blank=True)
     last_error = models.CharField(max_length=300, blank=True)
+    block_rule = models.ForeignKey("BlockRule", null=True, blank=True, on_delete=models.SET_NULL, related_name="hits")
     # Rates are copied in when the message arrives so later rate changes never rewrite history.
     currency = models.CharField(max_length=3, blank=True)
     payment_terms = models.CharField(max_length=30, blank=True)
@@ -61,29 +62,74 @@ class Message(models.Model):
 
 
 class BlockRule(models.Model):
-    """Replaces Restrictions, SMS Restrictions and Black List on the old platform."""
+    """Replaces Restrictions, SMS Restrictions and Black List on the old platform.
 
-    NUMBER, PREFIX, SENDER = "number", "prefix", "sender"
-    TYPES = [(NUMBER, "Destination number"), (PREFIX, "Destination prefix"), (SENDER, "Sender ID")]
+    A rule applies to everyone, to one supplier's traffic, to one client's traffic, or to one
+    billing group. Most rules block (number, prefix, sender ID); a limit rule caps how many SMS
+    one destination number may receive per hour, which catches SMS pumping early."""
+
+    NUMBER, PREFIX, SENDER, LIMIT = "number", "prefix", "sender", "limit"
+    TYPES = [(SENDER, "Block a sender ID"), (PREFIX, "Block a number prefix"), (NUMBER, "Block one number"),
+             (LIMIT, "Limit SMS per number per hour")]
+    ALL, SUPPLIER, CLIENT, GROUP = "all", "supplier", "client", "group"
+    SCOPES = [(ALL, "Everyone"), (SUPPLIER, "A supplier"), (CLIENT, "A client"), (GROUP, "A billing group")]
 
     rule_type = models.CharField(max_length=7, choices=TYPES)
     value = models.CharField(max_length=40)
+    scope = models.CharField("Applies to", max_length=8, choices=SCOPES, default=ALL)
     account = models.ForeignKey("crm.Account", null=True, blank=True, on_delete=models.CASCADE,
-                                help_text="Blank = applies to everyone")
+                                help_text="The supplier or client this rule applies to")
+    billing_group = models.ForeignKey("inventory.BillingGroup", null=True, blank=True, on_delete=models.CASCADE,
+                                      related_name="block_rules")
     reason = models.CharField(max_length=200, blank=True)
     created_at = models.DateTimeField(auto_now_add=True)
 
+    class Meta:
+        ordering = ["scope", "rule_type", "value"]
+
     def __str__(self):
+        if self.rule_type == self.LIMIT:
+            return f"Max {self.value} SMS per number per hour"
         return f"{self.get_rule_type_display()}: {self.value}"
 
+    @property
+    def target(self):
+        if self.scope == self.GROUP:
+            return self.billing_group
+        if self.scope in (self.SUPPLIER, self.CLIENT):
+            return self.account
+        return None
+
+    def target_label(self):
+        t = self.target
+        return f"{self.get_scope_display()[2:].capitalize()}: {t}" if t else "Everyone"
+
     @classmethod
-    def blocks(cls, source, destination, client=None):
-        qs = cls.objects.filter(models.Q(account__isnull=True) | models.Q(account=client))
-        for r in qs:
+    def applying(cls, supplier=None, client=None, billing_group=None):
+        q = models.Q(scope=cls.ALL)
+        if supplier:
+            q |= models.Q(scope=cls.SUPPLIER, account=supplier)
+        if client:
+            q |= models.Q(scope=cls.CLIENT, account=client)
+        if billing_group:
+            q |= models.Q(scope=cls.GROUP, billing_group=billing_group)
+        return cls.objects.filter(q)
+
+    @classmethod
+    def blocks(cls, source, destination, client=None, supplier=None, billing_group=None, at=None):
+        for r in cls.applying(supplier, client, billing_group):
             if r.rule_type == cls.NUMBER and destination == r.value:
                 return r
             if r.rule_type == cls.PREFIX and destination.startswith(r.value):
                 return r
             if r.rule_type == cls.SENDER and source.lower() == r.value.lower():
                 return r
+            if r.rule_type == cls.LIMIT and r.value.isdigit():
+                from datetime import timedelta
+                from django.utils import timezone
+                at = at or timezone.now()
+                recent = Message.objects.filter(destination=destination, received_at__gt=at - timedelta(hours=1),
+                                                received_at__lte=at).exclude(status=Message.BLOCKED).count()
+                if recent >= int(r.value):
+                    return r
         return None

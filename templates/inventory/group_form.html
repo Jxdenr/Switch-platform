@@ -49,6 +49,11 @@
 </div>
 <div class="checks">{% for field in form %}{% if field.name == "allow_partial_match" or field.name == "restrict_overlapping" %}<label>{{ field }} {{ field.label }}</label>{% endif %}{% endfor %}</div>
 </details>
+<details class="card" id="rules-card" {% if group_rules or rules_form.limit.value or rules_form.errors %}open{% endif %}><summary><b>SMS blocking rules / limits</b> <span class="muted">{% if group_rules %}{{ group_rules|length }} block{{ group_rules|length|pluralize }}{% endif %}{% if group_rules and rules_form.limit.value %} · {% endif %}{% if rules_form.limit.value %}max {{ rules_form.limit.value }} SMS per number per hour{% endif %}{% if not group_rules and not rules_form.limit.value %}none set{% endif %}</span></summary>
+<p class="muted small" style="margin:10px 0 0">Applies to every number in this billing group, whichever client has it. Blocked SMS are recorded but not forwarded or paid out. For rules on a whole supplier or client, use <a href="/sms/blocking/">Blocking rules</a>.</p>
+{% if group_rules %}<table class="rules-mini"><tbody>{% for r in group_rules %}<tr><td>{{ r.get_rule_type_display }}</td><td class="mono">{{ r.value }}</td><td class="muted">{{ r.hits.count }} blocked</td><td><label class="muted small"><input type="checkbox" name="remove_rule" value="{{ r.pk }}"> Remove</label></td></tr>{% endfor %}</tbody></table>{% endif %}
+<div class="grid-form" style="margin-top:12px">{% for field in rules_form %}<div class="field"><label for="{{ field.id_for_label }}">{{ field.label }}</label>{{ field }}{% if field.help_text %}<span class="help">{{ field.help_text }}</span>{% endif %}{% for e in field.errors %}<span class="err">{{ e }}</span>{% endfor %}</div>{% endfor %}</div>
+</details>
 <div><button class="btn primary">Save billing group</button> <a class="btn" href="/billing-groups/">Cancel</a></div>
 </form>
 {% endblock %}
@@ -71,6 +76,7 @@
       else tr.hidden=!adv&&!filled(tr);
     });
     voice.hidden=!c.includes('voice');
+    const rc=document.getElementById('rules-card'); if(rc) rc.hidden=!c.includes('sms');
     btn.hidden=adv;
     more.hidden=!adv||!rows.some(tr=>isSpare(tr)&&tr.hidden&&c.includes(tr.querySelector('select[name$=channel]').value));
   }
