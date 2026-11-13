@@ -50,6 +50,14 @@
 <script>
 document.addEventListener('keydown',e=>{if((e.ctrlKey||e.metaKey)&&e.key.toLowerCase()==='k'){e.preventDefault();document.getElementById('globalsearch').focus()}});
 </script>
+<script>
+/* Tabs, filters and segment switches reload the page: keep the scroll position so switching feels in place. */
+(function(){const k='keep-scroll:'+location.pathname;
+ try{const y=sessionStorage.getItem(k);if(y!==null){sessionStorage.removeItem(k);document.documentElement.style.scrollBehavior='auto';window.scrollTo(0,+y);document.documentElement.style.scrollBehavior='';}}catch(e){}
+ document.addEventListener('click',e=>{const a=e.target.closest('.tabs a,.seg a,.menu-list a[href^="?"]');
+  if(a&&new URL(a.href,location.href).pathname===location.pathname){try{sessionStorage.setItem(k,String(scrollY))}catch(e){}}});
+})();
+</script>
 {% block scripts %}{% endblock %}
 </body>
 </html>

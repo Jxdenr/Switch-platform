@@ -217,3 +217,43 @@ details.more .field{margin-top:12px}details.more>p{margin:8px 0 0}
 th.selall label{display:flex;align-items:center;gap:6px;white-space:nowrap;cursor:pointer}
 section.stack{max-width:none}section.stack>h2{margin-bottom:0}
 .menu-list a{white-space:nowrap}
+
+/* Motion: short, subtle, and off for people who ask for reduced motion */
+:root{--ease:cubic-bezier(.2,.7,.2,1);--t-fast:140ms;--t-med:220ms}
+html{scroll-behavior:smooth}
+@view-transition{navigation:auto}
+.page{view-transition-name:page}
+::view-transition-old(root),::view-transition-new(root){animation:none}
+::view-transition-old(page){animation:vt-out 120ms var(--ease) both}
+::view-transition-new(page){animation:vt-in var(--t-med) var(--ease) both}
+@keyframes vt-out{to{opacity:0}}
+@keyframes vt-in{from{opacity:0;transform:translateY(6px)}}
+.btn,.navlink,.seg a,.seg-radio span,.tabs a,.topnav summary,.menu-list a,a,input,select,textarea,.card,.stat,tbody tr,.pill,.delta{
+  transition:background-color var(--t-fast) var(--ease),color var(--t-fast) var(--ease),border-color var(--t-fast) var(--ease),box-shadow var(--t-fast) var(--ease),opacity var(--t-fast) var(--ease)}
+.btn:active:not(:disabled){transform:translateY(1px)}
+.tabs a{position:relative}
+.tabs a::after{content:"";position:absolute;left:14px;right:14px;bottom:-1px;height:2px;background:var(--accent);transform:scaleX(0);transition:transform var(--t-med) var(--ease)}
+.tabs a:hover::after{transform:scaleX(.4)}
+.tabs a.on{border-color:transparent}.tabs a.on::after{transform:scaleX(1);left:0;right:0}
+.stat:hover,.card.rise:hover{box-shadow:0 4px 14px rgba(0,0,0,.06)}
+.menu-list,.drop,.pop{animation:pop-in var(--t-fast) var(--ease)}
+@keyframes pop-in{from{opacity:0;transform:translateY(-4px) scale(.98)}}
+.flash{animation:slide-down var(--t-med) var(--ease)}
+@keyframes slide-down{from{opacity:0;transform:translateY(-6px)}}
+.statrow>*{animation:fade-up 320ms var(--ease) both}
+.statrow>*:nth-child(2){animation-delay:30ms}.statrow>*:nth-child(3){animation-delay:60ms}
+.statrow>*:nth-child(4){animation-delay:90ms}.statrow>*:nth-child(5){animation-delay:120ms}
+@keyframes fade-up{from{opacity:0;transform:translateY(6px)}}
+.chart rect{transform-box:fill-box;transform-origin:bottom;animation:grow 480ms var(--ease) both}
+.chart g:nth-child(odd) rect{animation-delay:40ms}
+@keyframes grow{from{transform:scaleY(0)}}
+.bar i{transition:width 600ms var(--ease)}
+details>summary{cursor:pointer}
+details[open]>:not(summary){animation:fade-up var(--t-med) var(--ease)}
+details.menu[open]>:not(summary){animation:pop-in var(--t-fast) var(--ease)}
+tbody tr.sel{transition:background-color 80ms linear}
+@media (max-width:760px){.nav.open .navgroup{animation:fade-up var(--t-med) var(--ease) both}}
+@media (prefers-reduced-motion:reduce){
+  html{scroll-behavior:auto}
+  *,*::before,*::after,::view-transition-group(*),::view-transition-old(*),::view-transition-new(*){animation:none!important;transition:none!important}
+}
