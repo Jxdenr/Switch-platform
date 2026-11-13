@@ -6,7 +6,11 @@
   <details class="menu"><summary class="btn">{{ period_label }} ▾</summary><div class="menu-list">
     {% for k, l in periods %}<a href="?period={{ k }}&amp;channel={{ channel }}" class="{% if k == period %}on{% endif %}">{{ l }}</a>{% endfor %}</div></details>
   {% if has_voice %}<div class="seg">{% for k, l in channels %}<a href="?period={{ period }}&amp;channel={{ k }}" class="{% if k == channel %}on{% endif %}">{{ l }}</a>{% endfor %}</div>{% endif %}
-  {% if not is_client %}<a class="btn primary" href="/numbers/add/">+ Add numbers</a>{% endif %}
+  {% if not is_client %}<details class="menu"><summary class="btn">+ New ▾</summary><div class="menu-list">
+    <a href="/numbers/add/">Add numbers to a range</a><a href="/billing-groups/new/">New billing group</a>
+    <a href="/accounts/new/?kind=client">New client</a><a href="/accounts/new/?kind=supplier">New supplier</a>
+    <a href="/sms/blocking/">New blocking rule</a></div></details>
+  <a class="btn primary" href="/numbers/allocate/">Allocate numbers</a>{% endif %}
 </div></div>
 
 <div class="statrow">
@@ -23,7 +27,7 @@
       <small>{% if dl.sms_failed %}<a href="/sms/records/?status=failed">{{ dl.sms_failed|intcomma }} failed</a>{% else %}No failures{% endif %}{% if channel == "all" and dl.asr is not None %} · calls {{ dl.asr|floatformat:0 }}% answered{% endif %}</small>{% endif %}</div>
   {% if not is_client %}
   <div class="stat"><b>Unrouted</b><span class="v {% if unrouted.total %}warn{% endif %}">{{ unrouted.total|intcomma }}</span>
-    <small>{% if unrouted.total %}<a href="/sms/records/?status=no_route">To numbers with no client</a>{% else %}Everything had a client{% endif %}{% if unrouted.blocked %} · {{ unrouted.blocked|intcomma }} blocked{% endif %}</small></div>
+    <small>{% if unrouted.total %}<a href="/sms/records/?status=no_route">To numbers with no client</a> · <a href="/numbers/allocate/">Allocate</a>{% else %}Everything had a client{% endif %}{% if unrouted.blocked %} · {{ unrouted.blocked|intcomma }} blocked{% endif %}</small></div>
   {% endif %}
 </div>
 {% if other_currencies %}<p class="muted small curnote">Also this period, shown separately because currencies are not added together:

@@ -216,3 +216,4 @@ details.more .field{margin-top:12px}details.more>p{margin:8px 0 0}
 .toolbar .tb-per{margin-left:auto;display:flex;align-items:center;gap:6px;font-size:13px;color:var(--muted)}.toolbar .tb-per select{width:auto}
 th.selall label{display:flex;align-items:center;gap:6px;white-space:nowrap;cursor:pointer}
 section.stack{max-width:none}section.stack>h2{margin-bottom:0}
+.menu-list a{white-space:nowrap}
