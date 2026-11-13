@@ -28,7 +28,7 @@ class BillingGroupForm(forms.ModelForm):
                   "max_duration": "Maximum billed (sec)", "acd": "ACD target (sec)", "asr": "ASR target (%)",
                   "concurrent_limit": "Max concurrent calls", "allow_partial_match": "Allow partial number match",
                   "restrict_overlapping": "Restrict overlapping calls"}
-        help_texts = {"billing_increment_first": "60 and 60 = per-minute billing; 1 and 1 = per second.", "acd": "", "asr": ""}
+        help_texts = {"title": "Shown to clients on their monthly statements.", "billing_increment_first": "60 and 60 = per-minute billing; 1 and 1 = per second.", "acd": "", "asr": ""}
 
 
 class RateForm(forms.ModelForm):

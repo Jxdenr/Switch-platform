@@ -10,7 +10,7 @@
 <section class="card"><h2>Range</h2>
 <div class="grid-form">
 {% for field in form %}{% if field.name in "supplier title country currency" %}
-<div class="field"><label for="{{ field.id_for_label }}">{{ field.label }}</label>{{ field }}{% for e in field.errors %}<span class="err">{{ e }}</span>{% endfor %}</div>{% endif %}{% endfor %}
+<div class="field"><label for="{{ field.id_for_label }}">{{ field.label }}</label>{{ field }}{% if field.help_text %}<span class="help">{{ field.help_text }}</span>{% endif %}{% for e in field.errors %}<span class="err">{{ e }}</span>{% endfor %}</div>{% endif %}{% endfor %}
 </div>
 <div class="field" style="margin-top:14px"><span class="label">Used for</span>
 <div class="seg seg-radio" id="routing">{% for r in form.routing_type %}<label>{{ r.tag }}<span>{{ r.choice_label }}</span></label>{% endfor %}</div></div>
