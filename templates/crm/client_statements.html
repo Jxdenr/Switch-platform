@@ -1,0 +1,16 @@
+{% extends "base.html" %}{% load switch humanize %}
+{% block title %}Statements{% endblock %}
+{% block content %}
+<div class="pagehead"><div><h1>Statements</h1><div class="sub">What {{ acc }} has earned for traffic delivered to you, and your monthly statements.</div></div></div>
+<section class="card"><div class="panelhead"><h2>Monthly statements</h2></div>
+<p class="muted" style="margin-top:0">{% if acc.auto_statements and recipients %}Emailed on the 1st of each month to {{ recipients|join:", " }}.{% else %}Not emailed automatically. Ask your account manager to turn this on.{% endif %}</p>
+<div class="tablewrap"><table><thead><tr><th>Month</th><th>Number</th><th class="num">Total</th><th></th></tr></thead><tbody>
+{% for d, x in month_rows %}<tr><td>{{ d|date:"F Y" }}</td>
+{% if x %}<td class="mono">{{ x.number }}</td><td class="num mono">{{ x.total|money }} {{ x.currency }}</td>{% else %}<td class="muted">Not issued yet</td><td></td>{% endif %}
+<td style="text-align:right;white-space:nowrap"><a class="btn sm" href="/accounts/{{ acc.pk }}/documents/statement/{{ d|date:'Y-m' }}/">View / print</a>
+<a class="btn sm" href="/accounts/{{ acc.pk }}/documents/statement/{{ d|date:'Y-m' }}/?export=csv">CSV</a></td></tr>
+{% endfor %}</tbody></table></div></section>
+<section class="card"><div class="panelhead"><h2>Volumes</h2></div>
+{% include "crm/_statement_volumes.html" %}
+</section>
+{% endblock %}

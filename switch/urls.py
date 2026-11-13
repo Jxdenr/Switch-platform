@@ -27,6 +27,7 @@ urlpatterns = [
     path("accounts/<int:pk>/<slug:kind>/<int:item>/", crm.panel_edit, name="panel_edit"),
     path("accounts/<int:pk>/<slug:kind>/<int:item>/delete/", crm.panel_delete, name="panel_delete"),
     path("binds/", crm.bind_status, name="bind_status"),
+    path("statements/", crm.client_statements, name="client_statements"),
     # Numbers
     path("billing-groups/", inv.group_list, name="group_list"),
     path("billing-groups/new/", inv.group_edit, name="group_new"),

@@ -23,6 +23,39 @@ def normalise(raw: str) -> str:
     return n
 
 
+SCI = re.compile(r"^\s*\d+(\.\d+)?[eE]\+?\d+\s*$")
+
+
+def check_text(text: str):
+    """Catch Excel's scientific notation (4.47701E+11) before it turns into wrong numbers."""
+    for cell in re.split(r"[,\n\r;\t]", text or ""):
+        if SCI.match(cell):
+            raise ValueError(f"“{cell.strip()}” looks like Excel scientific notation, so the real digits are lost. "
+                             "In Excel, format the number column as Text (or Number with 0 decimals), save, and "
+                             "upload again.")
+
+
+def to_international(numbers: list[str], dial_code: str) -> list[str]:
+    """Local format with a trunk 0 (07700 900123) -> international (447700900123) for the group's country."""
+    if not dial_code:
+        return numbers
+    out = []
+    for n in numbers:
+        if n.startswith("0") and not n.startswith(dial_code):
+            n = dial_code + n[1:]
+        out.append(n)
+    return out
+
+
+def rejected_lines(text: str) -> list[str]:
+    """Non-empty lines that contain no usable phone number (for telling the user what was skipped)."""
+    bad = []
+    for line in (text or "").splitlines():
+        if line.strip() and not parse_number_list(line):
+            bad.append(line.strip()[:40])
+    return bad
+
+
 def parse_number_list(text: str) -> list[str]:
     """Numbers from pasted text or CSV content: one per line or comma separated; the first
     column that looks like a number is used. Header rows are skipped."""
@@ -44,6 +77,7 @@ def parse_number_list(text: str) -> list[str]:
 
 
 def range_numbers(start: str, quantity: int) -> list[str]:
+    check_text(start)
     s = normalise(start)
     if not s:
         raise ValueError("Enter a starting number.")

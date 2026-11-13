@@ -66,7 +66,8 @@ class Command(BaseCommand):
                 services.allocate(group_nums[ci * 80:(ci + 1) * 80], c, t3045, via="system")
         self._calls(rnd)
         self._documents()
-        if Message.objects.exists():
+        self._extras(rnd, suppliers, clients, t3045, all_times)
+        if Message.objects.filter(currency="GBP").exists():
             self.stdout.write("Messages already present, skipping.")
             return
         from sms.routing import receive
@@ -84,6 +85,35 @@ class Command(BaseCommand):
             m.save()
         self._documents()
         self.stdout.write(self.style.SUCCESS("Demo data ready."))
+
+    def _extras(self, rnd, suppliers, clients, terms, all_times):
+        """A euro-priced range (so the dashboard shows currencies kept apart) and some traffic to
+        numbers nobody has been given (so 'Unrouted' has something in it)."""
+        from sms.routing import receive
+        if Message.objects.filter(currency="EUR").exists():
+            return
+        eur = Currency.objects.filter(code="EUR").first()
+        nl = Country.objects.filter(name="Netherlands").first()
+        if not eur or not nl:
+            return
+        g, _ = BillingGroup.objects.get_or_create(supplier=suppliers[1], title="NL Mobile", defaults={
+            "country": nl, "currency": eur, "routing_type": "sms", "network": "Mobile"})
+        BillingGroupRate.objects.get_or_create(billing_group=g, channel="sms", slot=1, time_of_day=all_times,
+                                               defaults={"payment_terms": terms, "rate_in": Decimal("0.03000"),
+                                                         "rate_out": Decimal("0.02200")})
+        services.add_numbers(g, [str(31612000000 + k) for k in range(100)], via="system")
+        services.allocate(list(Number.objects.filter(billing_group=g)[:60]), clients[1], terms, via="system")
+        now = timezone.now()
+        nl_nums = list(Number.objects.filter(billing_group=g)[:60])
+        for k in range(220):
+            m = receive(source="ShopCo", destination=rnd.choice(nl_nums).number, body=f"NL demo {k}",
+                        smpp_username="demo1", received_at=now - timedelta(minutes=rnd.randint(0, 60 * 24 * 30)))
+            m.status = Message.FORWARDED
+            m.save()
+        free = list(Number.objects.filter(allocations__isnull=True).exclude(billing_group=g)[:30])
+        for k in range(45):
+            receive(source="DemoBank", destination=rnd.choice(free).number, body=f"Unrouted demo {k}",
+                    smpp_username="demo0", received_at=now - timedelta(minutes=rnd.randint(0, 60 * 24 * 14)))
 
     def _calls(self, rnd):
         from voice.billing import record_call

@@ -15,6 +15,7 @@
   :root:not([data-theme="light"])[data-cw="graphite"]{--accent-soft:#3a2c10}
   :root:not([data-theme="light"])[data-cw="paper"]{--nav-bg:#151d24;--nav-fg:#dbe3ea;--nav-muted:#8796a3;--nav-active:#1f2c45;--accent:#6c95ff;--accent-fg:#0b1430;--accent-soft:#1c2740}
 }
+[hidden]{display:none!important}
 *{box-sizing:border-box}
 html,body{height:100%}
 body{margin:0;background:var(--bg);color:var(--fg);font:14px/1.45 var(--font-ui);font-variant-numeric:tabular-nums}
@@ -135,13 +136,20 @@ form.stack{display:flex;flex-direction:column;gap:14px;max-width:720px}
 .login{min-height:100%;display:grid;place-items:center;padding:16px}
 .login .card{width:min(380px,100%);display:flex;flex-direction:column;gap:14px}
 .ticker td{font-family:var(--font-data);font-size:12.5px}
+.navtoggle{display:none}
 @media (max-width:760px){
-  .shell[data-layout="sidebar"]{grid-template-columns:1fr}
-  .shell[data-layout="sidebar"] .nav{position:static;height:auto;flex-direction:row;flex-wrap:wrap;gap:6px}
-  .shell[data-layout="sidebar"] .navgroup{display:contents}
-  .shell[data-layout="sidebar"] .navgroup>b{display:none}
-  .shell[data-layout="rail"]{grid-template-columns:52px 1fr}
+  .shell[data-layout]{grid-template-columns:1fr;grid-template-rows:auto 1fr}
+  .shell[data-layout] .nav{position:sticky;top:0;z-index:40;height:auto;max-height:100vh;overflow:auto;padding:10px 16px;
+    display:flex;flex-direction:row;flex-wrap:wrap;align-items:center;justify-content:space-between;gap:8px}
+  .shell[data-layout] .navtoggle{display:inline-flex}
+  .shell[data-layout] .navgroup,.shell[data-layout] .topnav{display:none}
+  .shell[data-layout] .nav.open .navgroup{display:block;width:100%}
+  .shell[data-layout] .nav.open .navgroup>b{display:block;margin-top:8px}
+  .shell[data-layout] .nav .navlink span{display:inline}
+  .nav .navtoggle{background:transparent;color:var(--nav-fg);border-color:color-mix(in srgb,var(--nav-fg) 30%,transparent)}
   .page{padding:16px}
+  .topbar{padding:8px 16px}
+  .user span{display:none}
 }
 
 /* Dashboard */
@@ -174,3 +182,27 @@ table.rank td,table.rank th{padding-left:0}
 .fold summary{list-style:none;cursor:pointer;display:flex;align-items:baseline;gap:10px}.fold summary h2{margin:0}.fold summary::-webkit-details-marker{display:none}
 .fold[open] summary{margin-bottom:10px}
 .stat .v.traffic{font-size:21px;white-space:nowrap}
+
+/* Forms: billing group */
+.grid-form{display:grid;grid-template-columns:repeat(auto-fit,minmax(200px,1fr));gap:12px 16px}
+.label{display:block;font-weight:600;font-size:13px;margin-bottom:6px}
+.seg-radio label{display:inline-flex;align-items:center;cursor:pointer;border-right:1px solid var(--line)}
+.seg-radio label:last-child{border-right:0}.seg-radio input{position:absolute;opacity:0;pointer-events:none}
+.seg-radio span{padding:8px 16px;color:var(--muted);font-size:13px}.seg-radio input:checked+span{background:var(--accent-soft);color:var(--accent);font-weight:600}
+.seg-radio input:focus-visible+span{outline:2px solid var(--accent);outline-offset:-2px}
+details.more{margin-top:14px}details.more summary,#voice-card summary{cursor:pointer;color:var(--muted);font-size:13px}
+#voice-card summary{color:var(--fg);font-size:14px}
+.checks{display:flex;gap:18px;flex-wrap:wrap;margin-top:12px}.checks label{display:inline-flex;gap:8px;align-items:center}
+table.rates{width:100%;border-collapse:collapse}table.rates th{font-size:11px;text-transform:uppercase;letter-spacing:.06em;color:var(--muted);text-align:left;padding:6px 8px 6px 0;border-bottom:1px solid var(--line)}
+table.rates td{padding:8px 8px 8px 0;vertical-align:top;border-bottom:1px solid var(--line)}
+table.rates input,table.rates select{width:100%;min-width:0}
+table.rates .margin{padding-top:16px;color:var(--muted);white-space:nowrap}
+table.rates .simple-only{display:none}table.rates.simple .simple-only{display:table-cell}
+table.rates td.rowlabel{font-weight:600;padding-top:14px;white-space:nowrap;width:120px}table.rates td.rowlabel span{display:block;font-weight:400;font-size:12px;color:var(--muted)}
+table.rates.simple .adv{display:none}table.rates td.adv:last-child{white-space:nowrap;padding-top:14px}
+
+.stat b .cur{font-style:normal;font-weight:600;color:var(--fg);background:var(--surface-2);border-radius:4px;padding:1px 5px;margin-left:4px;letter-spacing:0}
+.stat .v.warn{color:var(--warn,#b45309)}.stat small a{color:inherit}.stat small strong{color:var(--fg);font-weight:600}
+.curnote{margin:10px 0 0}
+.stat b{grid-column:1;grid-row:1}.stat .delta{grid-column:2;grid-row:1;justify-self:end}.stat .v{grid-column:1/-1}
+@media (max-width:760px){.search{flex:1 1 140px;min-width:0}.statrow{grid-template-columns:repeat(2,minmax(0,1fr));gap:10px}.stat .v{font-size:22px}.stat .v.traffic{font-size:17px;white-space:normal}}

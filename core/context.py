@@ -26,11 +26,13 @@ ICONS = {
     "bind": '<path d="M6 10 10 6M4.5 7.5 3 9a2.5 2.5 0 0 0 3.5 3.5L8 11M8 5l1.5-1.5A2.5 2.5 0 0 1 13 7l-1.5 1.5"/>',
     "block": '<circle cx="8" cy="8" r="5.8"/><path d="m4 4 8 8"/>',
     "phone": '<path d="M4 2h2.5l1 3-1.5 1a7 7 0 0 0 3.5 3.5l1-1.5 3 1V12a2 2 0 0 1-2 2A10 10 0 0 1 2 4a2 2 0 0 1 2-2z"/>',
+    "doc": '<path d="M4 1.5h5.5L12.5 4.5V14.5H4z"/><path d="M6 7.5h4.5M6 10h4.5"/>',
     "set": '<circle cx="8" cy="8" r="2.2"/><path d="M8 1.5v2M8 12.5v2M1.5 8h2M12.5 8h2M3.4 3.4l1.4 1.4M11.2 11.2l1.4 1.4M3.4 12.6l1.4-1.4M11.2 4.8l1.4-1.4"/>',
 }
 
 NAV = [
-    ("Overview", [("dashboard", "Dashboard", "/", "home", False)]),
+    ("Overview", [("dashboard", "Dashboard", "/", "home", False),
+                  ("statements", "Statements", "/statements/", "doc", "client")]),
     ("Customers", [("suppliers", "Suppliers", "/suppliers/", "acc", True),
                    ("clients", "Clients", "/clients/", "acc", True),
                    ("binds", "Bind status", "/binds/", "bind", True)]),
@@ -57,7 +59,8 @@ def nav(request):
         visible = [{"key": k, "label": lbl, "url": url,
                     "icon": mark_safe(f'<svg viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="1.5" '
                                       f'stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">{ICONS[ic]}</svg>')}
-                   for k, lbl, url, ic, staff_only in items if not (staff_only and is_client)]
+                   for k, lbl, url, ic, who in items
+                   if (who == "client" and is_client) or (who is False) or (who is True and not is_client)]
         if visible:
             groups.append({"title": title, "items": visible})
     binds_down = 0

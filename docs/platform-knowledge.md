@@ -53,6 +53,19 @@ assistant's instructions, so keep it accurate whenever behaviour changes.
 - Client side = traffic we passed to them, priced at rate out (we pay them) -> Statement (ST-YYYYMM-account id).
 - Monthly documents are created and emailed on the send day for accounts with auto sending on. A sent document never changes and is never sent twice automatically; "Email now" resends on request. Accounts with no traffic that month get nothing.
 
+- Client-portal users see their own statements and volumes at /statements/ (no invoices, no billing group breakdown).
+
+## Dashboard
+- Due in (with "you keep X (Y%)" = margin), Due out, Traffic, Delivered (SMS % delivered; voice ASR and average call), Unrouted (traffic to numbers with no client).
+- Each currency is totalled separately. The biggest is the headline; others are listed under the cards.
+
+## Billing group form
+- Default view: one rate per channel the range is used for (SMS per message, voice per minute), with payment terms. "+ Add more payment terms or time-of-day rates" opens extra rows one at a time.
+- "Voice rules / limits": billing blocks (60/60 = per minute, 1/1 = per second), minimum and maximum billed, max concurrent calls, ACD and ASR targets.
+
+## Number upload
+- Local numbers (e.g. 07700 900123) get the billing group's country code. Excel scientific notation (4.47E+11) is refused. Numbers from another country need a tick. Skipped lines are listed.
+
 ## Blocking rules
 - Rules match a destination number, a destination prefix, or a sender ID (case-insensitive). A rule applies to everyone or to one account.
 

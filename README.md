@@ -56,6 +56,8 @@ Open http://127.0.0.1:8000 and sign in. Run the tests with `python manage.py tes
 | Built-in SMPP server (`smpp_server`): suppliers bind to send, clients bind to receive | Done, tested with a real SMPP client; **test with one real supplier and one real client before go-live** |
 | Supplier HTTP bind (`/api/sms/inbound/`), client HTTP delivery | Done, tested |
 | Statements tab, monthly invoices (suppliers) and statements (clients), auto email | Done, tested |
+| Dashboard: due in/out per currency, traffic, delivery rate (ASR/ACD for voice), unrouted traffic, top suppliers/clients | Done, tested |
+| Client portal: dashboard with their numbers and delivery health, Statements page (own statements + volumes) | Done, tested |
 | Jasmin sync for binds we make out to supplier SMSCs (`sync_jasmin`) | Written, **needs testing against a live Jasmin** |
 | REST API for clients | Next |
 | AI assistant | After v1 (see docs/platform-knowledge.md) |
@@ -90,3 +92,14 @@ clients get a **statement** (what we owe them, from Due Out). Add a billing emai
 invoice automatically" on the account, and `send_statements --loop` emails last month's document on
 `STATEMENT_SEND_DAY` (HTML in the email + a daily CSV). A sent document is frozen and never sent twice. Set
 `COMPANY_NAME`, `COMPANY_DETAILS` (address, VAT number, bank details) and the `EMAIL_*` settings first.
+
+Client-portal users get a **Statements** page with their own monthly statements and volumes. They cannot see
+invoices, other accounts, or a breakdown by billing group.
+
+## Dashboard
+
+Money in different currencies is never added together. The headline shows the currency with the most traffic
+in the period (labelled, e.g. GBP), lists any others underneath, and the chart and top lists use the headline
+currency. `DEFAULT_CURRENCY` (default GBP) is used when there is no traffic. "Delivered" is the share of routed
+SMS that reached the client; "Unrouted" counts SMS and calls to numbers with no client (blocked SMS are listed
+separately).

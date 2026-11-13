@@ -22,12 +22,79 @@ class BillingGroupForm(forms.ModelForm):
                   "blocked", "active", "note", "billing_increment_first", "billing_increment_next",
                   "min_duration", "allow_partial_match", "acd", "asr", "max_duration",
                   "restrict_overlapping", "concurrent_limit"]
-        widgets = {"note": forms.Textarea(attrs={"rows": 2})}
+        widgets = {"note": forms.Textarea(attrs={"rows": 2}), "routing_type": forms.RadioSelect}
+        labels = {"billing_increment_first": "First billing block (sec)",
+                  "billing_increment_next": "Then bill every (sec)", "min_duration": "Minimum billed (sec)",
+                  "max_duration": "Maximum billed (sec)", "acd": "ACD target (sec)", "asr": "ASR target (%)",
+                  "concurrent_limit": "Max concurrent calls", "allow_partial_match": "Allow partial number match",
+                  "restrict_overlapping": "Restrict overlapping calls"}
+        help_texts = {"billing_increment_first": "60 and 60 = per-minute billing; 1 and 1 = per second.", "acd": "", "asr": ""}
+
+
+class RateForm(forms.ModelForm):
+    class Meta:
+        model = BillingGroupRate
+        fields = ["channel", "slot", "payment_terms", "time_of_day", "rate_in", "rate_out"]
+        labels = {"rate_in": "Supplier pays us", "rate_out": "We pay the client"}
+
+    def __init__(self, *a, **k):
+        super().__init__(*a, **k)
+        self.fields["payment_terms"].empty_label = "Choose terms"
+        self.fields["time_of_day"].empty_label = "All day"
+        for f in ("rate_in", "rate_out"):
+            self.fields[f].widget.attrs.update({"placeholder": "0.00000", "step": "0.00001", "inputmode": "decimal"})
+
+
+class BaseRateFormSet(forms.BaseInlineFormSet):
+    routing_type = None
+
+    def clean(self):
+        super().clean()
+        seen, channels = set(), None
+        if self.routing_type:
+            channels = BillingGroup(routing_type=self.routing_type).channels
+        for f in self.forms:
+            if not getattr(f, "cleaned_data", None) or f.cleaned_data.get("DELETE"):
+                continue
+            d = f.cleaned_data
+            if not d.get("channel"):
+                continue
+            if channels and d["channel"] not in channels:
+                raise forms.ValidationError(
+                    f"There's a {d['channel'].upper()} rate, but this group is only used for "
+                    f"{' and '.join(c.upper() for c in channels)}. Change “Used for” or clear that rate.")
+            key = (d["channel"], d.get("slot"), d.get("time_of_day"))
+            if key in seen:
+                raise forms.ValidationError(
+                    f"Two {d['channel'].upper()} rates use Terms {d.get('slot')}"
+                    f"{' for ' + str(d['time_of_day']) if d.get('time_of_day') else ''}. Each needs its own slot.")
+            seen.add(key)
 
 
 RateFormSet = forms.inlineformset_factory(
-    BillingGroup, BillingGroupRate, fields=["channel", "slot", "payment_terms", "time_of_day", "rate_in", "rate_out"],
-    extra=3, max_num=12, can_delete=True)
+    BillingGroup, BillingGroupRate, form=RateForm, formset=BaseRateFormSet, extra=0, max_num=18, can_delete=True)
+
+
+def _rate_formset(data, group, default_terms):
+    """Existing rates, plus empty rows for every channel/slot not used yet. The first row per
+    channel is the simple one shown by default; the rest appear under “Add terms or time band”."""
+    existing = list(group.rates.select_related("time_of_day")) if group.pk else []
+    all_day = lambda t: t is None or (t.start_time is None and t.end_time is None)  # noqa: E731
+    used = {(r.channel, r.slot) for r in existing if all_day(r.time_of_day)}
+    initial = [{"channel": ch, "slot": slot, "payment_terms": default_terms, "rate_in": None, "rate_out": None}
+               for slot in (1, 2, 3) for ch in ("sms", "voice") if (ch, slot) not in used]
+    Fs = forms.inlineformset_factory(BillingGroup, BillingGroupRate, form=RateForm, formset=BaseRateFormSet,
+                                     extra=len(initial), max_num=18, can_delete=True)
+    fs = Fs(data, instance=group, initial=initial)
+    first = set()
+    for f in fs.forms:
+        ch = f["channel"].value()
+        slot = str(f["slot"].value())
+        tod = f.instance.time_of_day if f.instance.pk else None
+        f.is_simple = ch not in first and slot == "1" and (all_day(tod) if f.instance.pk else not f["time_of_day"].value())
+        if f.is_simple:
+            first.add(ch)
+    return fs
 
 
 def _group_qs():
@@ -74,7 +141,16 @@ def group_edit(request, pk=None):
     form = BillingGroupForm(request.POST or None, instance=obj,
                             initial={"supplier": request.GET.get("supplier")} if not obj else None)
     form.fields["supplier"].queryset = Account.objects.filter(is_supplier=True)
-    rates = RateFormSet(request.POST or None, instance=obj or BillingGroup())
+    for f, label in (("supplier", "Choose supplier"), ("country", "Choose country"), ("currency", "Choose currency"),
+                     ("number_type", "Any")):
+        form.fields[f].empty_label = label
+    sup = Account.objects.filter(pk=request.GET.get("supplier") or 0).first() if not obj else None
+    default_terms = (sup.payment_terms_id if sup and sup.payment_terms_id else
+                     PaymentTerms.objects.filter(title="30/45").values_list("pk", flat=True).first())
+    if sup and sup.currency_id and not obj:
+        form.initial.setdefault("currency", sup.currency_id)
+    rates = _rate_formset(request.POST or None, obj or BillingGroup(), default_terms)
+    rates.routing_type = request.POST.get("routing_type") if request.method == "POST" else None
     if request.method == "POST" and form.is_valid() and rates.is_valid():
         g = form.save()
         rates.instance = g
@@ -83,7 +159,10 @@ def group_edit(request, pk=None):
         log(request.user, "billing_group.save", g)
         messages.success(request, f"Saved billing group “{g.title}”.")
         return redirect("group_detail", g.pk)
-    return render(request, "inventory/group_form.html", {"form": form, "rates": rates, "obj": obj, "nav": "groups"})
+    voice_fields = [form[n] for n in ("billing_increment_first", "billing_increment_next", "min_duration", "max_duration",
+                                      "concurrent_limit", "acd", "asr")]
+    return render(request, "inventory/group_form.html", {"form": form, "rates": rates, "obj": obj, "nav": "groups",
+                                                         "voice_fields": voice_fields})
 
 
 @staff_required
@@ -101,6 +180,7 @@ class AddNumbersForm(forms.Form):
     numbers = forms.CharField(required=False, widget=forms.Textarea(attrs={"rows": 6}),
                               help_text="One per line, or comma separated. Spaces and + are ignored.")
     file = forms.FileField(required=False, help_text="The first column that looks like a phone number is used.")
+    other_country = forms.BooleanField(required=False, label="Allow numbers from another country")
 
 
 @staff_required
@@ -109,17 +189,36 @@ def add_numbers(request):
                           initial={"billing_group": request.GET.get("group")})
     if request.method == "POST" and form.is_valid():
         d = form.cleaned_data
+        group = d["billing_group"]
+        dial = group.country.dial_code or ""
+        skipped = []
         try:
             if d["mode"] == "range":
-                nums = services.range_numbers(d["start"], d["quantity"] or 0)
-            elif d["mode"] == "list":
-                nums = services.parse_number_list(d["numbers"])
+                if not d["quantity"]:
+                    raise ValueError("Enter how many numbers are in the range.")
+                nums = services.range_numbers(services.to_international([services.normalise(d["start"])], dial)[0],
+                                              d["quantity"])
             else:
-                if not d["file"]:
-                    raise ValueError("Choose a CSV file.")
-                nums = services.parse_number_list(d["file"].read().decode("utf-8-sig", errors="ignore"))
+                if d["mode"] == "list":
+                    text = d["numbers"]
+                else:
+                    if not d["file"]:
+                        raise ValueError("Choose a CSV file.")
+                    raw = d["file"].read()
+                    try:
+                        text = raw.decode("utf-8-sig")
+                    except UnicodeDecodeError:
+                        text = raw.decode("latin-1")
+                services.check_text(text)
+                nums = services.to_international(services.parse_number_list(text), dial)
+                skipped = services.rejected_lines(text) if d["mode"] == "list" else []
             if not nums:
-                raise ValueError("No phone numbers found.")
+                raise ValueError("No phone numbers found. Numbers need 6 to 15 digits, with the country code.")
+            foreign = [n for n in nums if dial and not n.startswith(dial)]
+            if foreign and not d["other_country"]:
+                raise ValueError(f"{len(foreign):,} of these don't start with +{dial} ({group.country.name}), "
+                                 f"for example +{foreign[0]}. Check the billing group, or tick “Allow numbers "
+                                 "from another country”.")
         except ValueError as e:
             form.add_error(None, str(e))
         else:
@@ -127,6 +226,9 @@ def add_numbers(request):
             msg = f"Added {len(res.created):,} numbers to {d['billing_group'].title}."
             if res.duplicates:
                 msg += f" Skipped {len(res.duplicates):,} that already exist."
+            if skipped:
+                msg += f" Ignored {len(skipped)} line{'s' if len(skipped) > 1 else ''} with no valid number " \
+                       f"(e.g. “{skipped[0]}”)."
             messages.success(request, msg)
             return redirect(f"/numbers/?group={d['billing_group'].pk}")
     return render(request, "inventory/add_numbers.html", {"form": form, "nav": "numbers"})
@@ -170,7 +272,9 @@ def number_list(request):
     qs = _numbers_qs(request)
     if request.GET.get("export") == "csv":
         return _export_numbers(qs)
-    page = Paginator(qs, int(request.GET.get("per", 50))).get_page(request.GET.get("page"))
+    per = request.GET.get("per", "50")
+    per = min(max(int(per), 10), 500) if per.isdigit() else 50
+    page = Paginator(qs, per).get_page(request.GET.get("page"))
     allocs = {}
     for a in (Allocation.objects.filter(number__in=page.object_list, ends_at__isnull=True)
               .select_related("client", "payment_terms").order_by("channel")):

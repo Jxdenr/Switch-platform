@@ -2,26 +2,86 @@
 {% block title %}{% if obj %}Edit {{ obj.title }}{% else %}New billing group{% endif %}{% endblock %}
 {% block content %}
 <div class="crumbs"><a href="/billing-groups/">Billing groups</a>{% if obj %} / {{ obj.title }}{% endif %}</div>
-<div class="pagehead"><h1>{% if obj %}Edit {{ obj.title }}{% else %}New billing group{% endif %}</h1></div>
-<form method="post" class="stack" style="max-width:960px">{% csrf_token %}
-{% if form.non_field_errors %}<ul class="errorlist">{% for e in form.non_field_errors %}<li>{{ e }}</li>{% endfor %}</ul>{% endif %}
-<section class="card"><h2>Range</h2><div class="fieldrow">
-{% for field in form %}{% if field.name in "supplier title routing_type number_type country network currency" %}
+<div class="pagehead"><div><h1>{% if obj %}Edit {{ obj.title }}{% else %}New billing group{% endif %}</h1>
+<div class="sub">One supplier range: who it's from, what it's used for, and what the supplier pays.</div></div></div>
+<form method="post" class="stack" style="max-width:900px">{% csrf_token %}
+{% if form.non_field_errors or rates.non_form_errors %}<ul class="errorlist">{% for e in form.non_field_errors %}<li>{{ e }}</li>{% endfor %}{% for e in rates.non_form_errors %}<li>{{ e }}</li>{% endfor %}</ul>{% endif %}
+
+<section class="card"><h2>Range</h2>
+<div class="grid-form">
+{% for field in form %}{% if field.name in "supplier title country currency" %}
 <div class="field"><label for="{{ field.id_for_label }}">{{ field.label }}</label>{{ field }}{% for e in field.errors %}<span class="err">{{ e }}</span>{% endfor %}</div>{% endif %}{% endfor %}
-</div><div class="fieldrow" style="margin-top:12px">{% for field in form %}{% if field.name == "blocked" or field.name == "active" %}<div class="field check"><label for="{{ field.id_for_label }}">{{ field.label }}</label>{{ field }}</div>{% endif %}{% endfor %}</div>
-<div class="field" style="margin-top:12px"><label for="{{ form.note.id_for_label }}">Note</label>{{ form.note }}</div></section>
+</div>
+<div class="field" style="margin-top:14px"><span class="label">Used for</span>
+<div class="seg seg-radio" id="routing">{% for r in form.routing_type %}<label>{{ r.tag }}<span>{{ r.choice_label }}</span></label>{% endfor %}</div></div>
+<details class="more" {% if obj.network or obj.number_type or obj.note or obj.blocked %}open{% endif %}><summary>Network, number type, notes</summary>
+<div class="grid-form" style="margin-top:10px">
+{% for field in form %}{% if field.name in "number_type network" %}<div class="field"><label for="{{ field.id_for_label }}">{{ field.label }}</label>{{ field }}</div>{% endif %}{% endfor %}
+</div>
+<div class="field" style="margin-top:10px"><label for="{{ form.note.id_for_label }}">Note</label>{{ form.note }}</div>
+<div class="checks">{% for field in form %}{% if field.name == "blocked" or field.name == "active" %}<label>{{ field }} {{ field.label }}</label>{% endif %}{% endfor %}</div>
+</details>
+</section>
 
-<section class="card"><h2>Rates</h2><p class="muted" style="margin-top:0">Add a row per channel (SMS, voice) for each payment terms, up to three terms. Rate in is what the supplier pays per SMS (or minute); rate out is the default client payout used when allocating.</p>
-{{ rates.management_form }}{% if rates.non_form_errors %}<ul class="errorlist">{% for e in rates.non_form_errors %}<li>{{ e }}</li>{% endfor %}</ul>{% endif %}
-<div class="tablewrap"><table><thead><tr><th>Channel</th><th>Slot</th><th>Payment terms</th><th>Time of day</th><th>Rate in</th><th>Rate out</th><th>Remove</th></tr></thead><tbody>
-{% for rf in rates %}<tr>{% for h in rf.hidden_fields %}{{ h }}{% endfor %}<td>{{ rf.channel }}</td><td>{{ rf.slot }}</td><td>{{ rf.payment_terms }}{{ rf.payment_terms.errors }}</td><td>{{ rf.time_of_day }}</td><td>{{ rf.rate_in }}</td><td>{{ rf.rate_out }}</td><td>{% if rf.instance.pk %}{{ rf.DELETE }}{% endif %}</td></tr>{% endfor %}
-</tbody></table></div></section>
+<section class="card"><div class="panelhead"><h2>Rate</h2><span class="muted small" id="cur-note"></span></div>
+<p class="muted" style="margin-top:0">What the supplier pays you for each SMS (or each minute of a call), and the default you pay the client. You can change the client's rate when you allocate.</p>
+{{ rates.management_form }}
+<table class="rates simple" id="rates"><thead><tr><th class="simple-only">Rate for</th><th class="adv">Channel</th><th class="adv">Terms slot</th><th>Payment terms</th><th class="adv">Time of day</th><th>Supplier pays us</th><th>We pay the client</th><th>Margin</th><th class="adv"></th></tr></thead><tbody>
+{% for rf in rates %}<tr data-channel="{{ rf.channel.value }}" class="{% if rf.is_simple %}simple-row{% elif not rf.instance.pk %}adv-row{% endif %}">
+{% for h in rf.hidden_fields %}{{ h }}{% endfor %}
+<td class="simple-only rowlabel">{% if rf.channel.value == "voice" %}Voice<span>per minute</span>{% else %}SMS<span>per message</span>{% endif %}</td>
+<td class="adv">{{ rf.channel }}</td><td class="adv">{{ rf.slot }}</td>
+<td>{{ rf.payment_terms }}{% for e in rf.payment_terms.errors %}<span class="err">{{ e }}</span>{% endfor %}</td>
+<td class="adv">{{ rf.time_of_day }}</td>
+<td>{{ rf.rate_in }}{% for e in rf.rate_in.errors %}<span class="err">{{ e }}</span>{% endfor %}</td>
+<td>{{ rf.rate_out }}{% for e in rf.rate_out.errors %}<span class="err">{{ e }}</span>{% endfor %}</td>
+<td class="mono margin"></td>
+<td class="adv">{% if rf.instance.pk %}<label class="muted small">{{ rf.DELETE }} Remove</label>{% endif %}</td></tr>{% endfor %}
+</tbody></table>
+<button type="button" class="btn sm" id="adv-btn" style="margin-top:10px">+ Add more payment terms or time-of-day rates</button>
+<button type="button" class="btn sm" id="more-btn" style="margin-top:10px" hidden>+ Add another rate</button>
+</section>
 
-<details class="card"><summary><b>Voice settings</b> <span class="muted">(only used for voice ranges)</span></summary><div class="fieldrow" style="margin-top:12px">
-{% for field in form %}{% if field.name in "billing_increment_first billing_increment_next min_duration acd asr max_duration concurrent_limit" %}
-<div class="field"><label for="{{ field.id_for_label }}">{{ field.label }}</label>{{ field }}</div>{% endif %}{% endfor %}
-{% for field in form %}{% if field.name == "allow_partial_match" or field.name == "restrict_overlapping" %}<div class="field check"><label for="{{ field.id_for_label }}">{{ field.label }}</label>{{ field }}</div>{% endif %}{% endfor %}
-</div></details>
+<details class="card" id="voice-card" {% if obj and obj.routing_type != "sms" %}open{% endif %}><summary><b>Voice rules / limits</b> <span class="muted">billing blocks, minimum and maximum duration, call limits</span></summary>
+<div class="grid-form" style="margin-top:12px">
+{% for field in voice_fields %}
+<div class="field"><label for="{{ field.id_for_label }}">{{ field.label }}</label>{{ field }}{% if field.help_text %}<span class="help">{{ field.help_text }}</span>{% endif %}</div>{% endfor %}
+</div>
+<div class="checks">{% for field in form %}{% if field.name == "allow_partial_match" or field.name == "restrict_overlapping" %}<label>{{ field }} {{ field.label }}</label>{% endif %}{% endfor %}</div>
+</details>
 <div><button class="btn primary">Save billing group</button> <a class="btn" href="/billing-groups/">Cancel</a></div>
 </form>
 {% endblock %}
+{% block scripts %}<script>
+(function(){
+  const table=document.getElementById('rates'), btn=document.getElementById('adv-btn'), more=document.getElementById('more-btn'), voice=document.getElementById('voice-card');
+  const rows=[...table.querySelectorAll('tbody tr')];
+  const routing=()=>((document.querySelector('#routing input:checked')||{}).value)||'sms';
+  const chans=()=>routing()==='both'?['sms','voice']:[routing()];
+  const filled=tr=>[...tr.querySelectorAll('input[name$=rate_in],input[name$=rate_out]')].some(i=>i.value!=='');
+  const isSpare=tr=>tr.classList.contains('adv-row');
+  rows.forEach(tr=>{if(isSpare(tr)&&filled(tr))tr.classList.add('shown')});
+  function sync(){
+    const adv=!table.classList.contains('simple'), c=chans();
+    rows.forEach(tr=>{
+      const ch=tr.querySelector('select[name$=channel]').value, on=c.includes(ch);
+      if(!on) tr.hidden=!filled(tr);
+      else if(tr.classList.contains('simple-row')) tr.hidden=false;
+      else if(isSpare(tr)) tr.hidden=!(adv&&tr.classList.contains('shown'));
+      else tr.hidden=!adv&&!filled(tr);
+    });
+    voice.hidden=!c.includes('voice');
+    btn.hidden=adv;
+    more.hidden=!adv||!rows.some(tr=>isSpare(tr)&&tr.hidden&&c.includes(tr.querySelector('select[name$=channel]').value));
+  }
+  function margin(tr){const i=parseFloat(tr.querySelector('[name$=rate_in]').value),o=parseFloat(tr.querySelector('[name$=rate_out]').value);
+    const cell=tr.querySelector('.margin');cell.textContent=(isNaN(i)||isNaN(o))?'':((i-o).toFixed(5)+(i?'  ('+Math.round((i-o)/i*100)+'%)':''));}
+  rows.forEach(tr=>{tr.addEventListener('input',()=>margin(tr));margin(tr)});
+  document.querySelectorAll('#routing input').forEach(r=>r.addEventListener('change',sync));
+  function addOne(){const c=chans();const tr=rows.find(tr=>isSpare(tr)&&!tr.classList.contains('shown')&&c.includes(tr.querySelector('select[name$=channel]').value));if(tr)tr.classList.add('shown');}
+  btn.addEventListener('click',()=>{table.classList.remove('simple');addOne();sync()});
+  more.addEventListener('click',()=>{addOne();sync()});
+  if(rows.some(tr=>!tr.classList.contains('simple-row')&&filled(tr)))table.classList.remove('simple');
+  sync();
+})();
+</script>{% endblock %}

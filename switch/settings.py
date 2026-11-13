@@ -98,6 +98,7 @@ FORWARD_TIMEOUT = float(os.environ.get("FORWARD_TIMEOUT", "10"))
 # Statements and invoices. COMPANY_DETAILS appears on every document: address, VAT/company
 # number and the bank details suppliers should pay into (use \n for new lines in .env).
 COMPANY_NAME = os.environ.get("COMPANY_NAME", "Your Company Ltd")
+DEFAULT_CURRENCY = os.environ.get("DEFAULT_CURRENCY", "GBP")
 COMPANY_DETAILS = os.environ.get("COMPANY_DETAILS", "").replace("\\n", "\n")
 STATEMENT_SEND_DAY = int(os.environ.get("STATEMENT_SEND_DAY", "1"))
 

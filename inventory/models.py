@@ -21,7 +21,7 @@ class BillingGroup(models.Model):
     supplier = models.ForeignKey("crm.Account", on_delete=models.PROTECT, related_name="billing_groups",
                                  limit_choices_to={"is_supplier": True})
     title = models.CharField(max_length=120)
-    routing_type = models.CharField(max_length=5, choices=ROUTING_TYPES, default=SMS,
+    routing_type = models.CharField("Used for", max_length=5, choices=ROUTING_TYPES, default=SMS,
                                     help_text="Numbers in this group can be used for SMS, voice, or both.")
     number_type = models.ForeignKey("core.NumberType", null=True, blank=True, on_delete=models.PROTECT)
     country = models.ForeignKey("core.Country", on_delete=models.PROTECT)

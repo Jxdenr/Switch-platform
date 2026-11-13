@@ -2,13 +2,15 @@ from datetime import timedelta
 
 from django import forms
 from django.contrib import messages
+from django.contrib.auth.decorators import login_required
+from django.core.exceptions import PermissionDenied
 from django.db.models import Count, Q
 from django.http import Http404, HttpResponse
 from django.shortcuts import get_object_or_404, redirect, render
 from django.utils import timezone
 from django.views.decorators.http import require_POST
 
-from core.access import staff_required
+from core.access import client_account, staff_required
 from core.models import log
 from sms.views import _date_range
 from . import models as m
@@ -121,6 +123,26 @@ def account_detail(request, pk):
     return render(request, "crm/account_detail.html", ctx)
 
 
+@login_required
+def client_statements(request):
+    """Client portal: the client's own volumes and monthly statements (what we owe them)."""
+    acc = client_account(request.user)
+    if not acc:
+        return redirect("client_list")
+    ctx = statement_context(request, acc)
+    ctx["breakdowns"] = [b for b in st.BREAKDOWNS if b[0] != "group"]  # billing groups are internal
+    if ctx["by"] == "group":
+        ctx["by"] = "day"
+        ctx["rows"] = st.volumes(acc, ctx["side"], ctx["start"], ctx["end"], ctx["channel"], ctx["by"])
+        ctx["t"], ctx["by_label"] = st.totals(ctx["rows"]), dict(st.BREAKDOWNS)[ctx["by"]]
+    if request.GET.get("export") == "csv":
+        resp = HttpResponse(st.rows_csv(ctx["rows"], ctx["by_label"]), content_type="text/csv")
+        resp["Content-Disposition"] = f'attachment; filename="Statement {ctx["start"]:%Y%m%d}-{ctx["end"]:%Y%m%d}.csv"'
+        return resp
+    ctx.update({"acc": acc, "nav": "statements", "client_view": True, "sms_amount_label": "Earned"})
+    return render(request, "crm/client_statements.html", ctx)
+
+
 def statement_context(request, acc):
     f = request.GET
     sides = st.sides(acc) or [st.SUPPLIER]
@@ -147,11 +169,14 @@ def statement_context(request, acc):
             "recipients": st.recipients(acc), "sms_amount_label": "Due in" if side == st.SUPPLIER else "Due out"}
 
 
-@staff_required
+@login_required
 def document_view(request, pk, kind, month):
     acc = get_object_or_404(m.Account, pk=pk)
     if kind not in dict(m.Document.KINDS):
         raise Http404
+    own = client_account(request.user)
+    if own and (own.pk != acc.pk or kind != m.Document.STATEMENT):
+        raise PermissionDenied  # a client sees only its own statements
     try:
         first, last = st.month_bounds(month)
     except ValueError:

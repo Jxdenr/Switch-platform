@@ -26,38 +26,7 @@
 {% empty %}<tr><td colspan="5" class="empty">No numbers allocated.</td></tr>{% endfor %}</tbody></table></div>
 {% if allocations|length == 200 %}<p class="muted">Showing the first 200. <a href="/numbers/?client={{ acc.pk }}">See all</a>.</p>{% endif %}
 {% elif tab == "statement" %}
-<form class="filters" method="get"><input type="hidden" name="tab" value="statement">
-  {% if sides|length > 1 %}<label>View<select name="side" onchange="this.form.submit()">
-    <option value="supplier" {% if side == "supplier" %}selected{% endif %}>As supplier (traffic from them)</option>
-    <option value="client" {% if side == "client" %}selected{% endif %}>As client (traffic to them)</option></select></label>
-  {% else %}<input type="hidden" name="side" value="{{ side }}">{% endif %}
-  <label>Date range<input type="text" name="date_range" value="{{ date_range }}" style="min-width:250px"></label>
-  <label>Channel<select name="channel"><option value="all">SMS &amp; voice</option>
-    <option value="sms" {% if channel == "sms" %}selected{% endif %}>SMS</option>
-    <option value="voice" {% if channel == "voice" %}selected{% endif %}>Voice</option></select></label>
-  <label>Break down by<select name="by">{% for k, l in breakdowns %}<option value="{{ k }}" {% if by == k %}selected{% endif %}>{{ l }}</option>{% endfor %}</select></label>
-  <button class="btn primary">Show</button>
-  <a class="btn" href="?{{ request.GET.urlencode }}&amp;export=csv">Export CSV</a>
-</form>
-<div class="kpis">
-  {% if channel != "voice" %}<div class="kpi"><b>SMS</b><span>{{ t.sms|intcomma }}</span></div>
-  <div class="kpi"><b>SMS {{ sms_amount_label|lower }}</b><span>{{ t.sms_amount|money }}</span></div>{% endif %}
-  {% if channel != "sms" %}<div class="kpi"><b>Calls</b><span>{{ t.calls|intcomma }}</span></div>
-  <div class="kpi"><b>Minutes</b><span>{{ t.minutes|floatformat:0|intcomma }}</span></div>
-  <div class="kpi"><b>Voice {{ sms_amount_label|lower }}</b><span>{{ t.voice_amount|money }}</span></div>{% endif %}
-  <div class="kpi"><b>Total {{ sms_amount_label|lower }}</b><span>{{ t.total|money }} {{ t.currencies|join:", " }}</span></div>
-</div>
-<div class="tablewrap"><table><thead><tr><th>{{ by_label }}</th><th>Currency</th>
-{% if channel != "voice" %}<th class="num">SMS</th><th class="num">SMS amount</th>{% endif %}
-{% if channel != "sms" %}<th class="num">Calls</th><th class="num">Connected</th><th class="num">Minutes</th><th class="num">Voice amount</th>{% endif %}
-<th class="num">Total</th></tr></thead><tbody>
-{% for r in rows %}<tr><td class="mono">{% if by == "number" %}{{ r.key|e164 }}{% elif by == "month" %}{{ r.key|date:"M Y" }}{% elif by == "day" %}{{ r.key|date:"Y-m-d D" }}{% else %}{{ r.key|default:"(none)" }}{% endif %}</td><td>{{ r.currency }}</td>
-{% if channel != "voice" %}<td class="num mono">{{ r.sms|intcomma }}</td><td class="num mono">{{ r.sms_amount|money }}</td>{% endif %}
-{% if channel != "sms" %}<td class="num mono">{{ r.calls|intcomma }}</td><td class="num mono">{{ r.connected|intcomma }}</td><td class="num mono">{{ r.minutes|floatformat:1 }}</td><td class="num mono">{{ r.voice_amount|money }}</td>{% endif %}
-<td class="num mono"><b>{{ r.total|money }}</b></td></tr>
-{% empty %}<tr><td colspan="9" class="empty">No traffic in this period.</td></tr>{% endfor %}</tbody></table></div>
-<p class="muted">Full message and call detail for this period: <a href="/sms/records/?{{ side }}={{ acc.pk }}&amp;date_range={{ date_range|urlencode }}">SMS records</a> · <a href="/voice/cdrs/?{{ side }}={{ acc.pk }}&amp;date_range={{ date_range|urlencode }}">Call records</a> (both export to CSV).</p>
-
+{% include "crm/_statement_volumes.html" %}
 <section class="card"><div class="panelhead"><h2>Monthly {% if doc_kind == "invoice" %}invoices{% else %}statements{% endif %}</h2></div>
 <p class="muted" style="margin-top:0">{% if acc.auto_statements and recipients %}Sent automatically on the 1st of each month to {{ recipients|join:", " }}.{% elif recipients %}Automatic sending is off. <a href="/accounts/{{ acc.pk }}/edit/">Turn it on</a>.{% else %}No billing email yet. <a href="/accounts/{{ acc.pk }}/edit/">Add one</a> to send {% if doc_kind == "invoice" %}invoices{% else %}statements{% endif %} by email.{% endif %}</p>
 <div class="tablewrap"><table><thead><tr><th>Month</th><th>Number</th><th class="num">Total</th><th>Status</th><th></th></tr></thead><tbody>

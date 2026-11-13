@@ -73,6 +73,8 @@ def cdrs(request):
 def stats(request):
     qs, start, end = _filtered(request)
     by = request.GET.get("by", "supplier_client")
+    if by not in ("supplier_client", "supplier", "client", "group", "day"):
+        by = "supplier_client"
     fields = {"supplier_client": ["supplier__title", "client__title", "payment_terms", "currency"],
               "supplier": ["supplier__title", "currency"], "client": ["client__title", "currency"],
               "group": ["billing_group__title", "supplier__title", "currency"],

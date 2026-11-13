@@ -10,6 +10,7 @@
 <div class="shell" data-layout="{{ ui_layout }}">
   <nav class="nav" aria-label="Main">
     <a class="brand" href="/"><i>SW</i><span>Switch</span></a>
+    <button type="button" class="btn sm navtoggle" aria-expanded="false" aria-controls="navgroups" onclick="const n=this.closest('.nav');n.classList.toggle('open');this.setAttribute('aria-expanded',n.classList.contains('open'))">Menu</button>
     {% for g in nav_groups %}<div class="navgroup"><b>{{ g.title }}</b>
       {% for i in g.items %}<a class="navlink{% if i.key == nav %} on{% endif %}" href="{{ i.url }}" title="{{ i.label }}">{{ i.icon }}<span>{{ i.label }}</span></a>{% endfor %}
     </div>{% endfor %}
