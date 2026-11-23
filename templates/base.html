@@ -12,7 +12,7 @@
     <a class="brand" href="/"><i>SW</i><span>Switch</span></a>
     <button type="button" class="btn sm navtoggle" aria-expanded="false" aria-controls="navgroups" onclick="const n=this.closest('.nav');n.classList.toggle('open');this.setAttribute('aria-expanded',n.classList.contains('open'))">Menu</button>
     {% for g in nav_groups %}<div class="navgroup"><b>{{ g.title }}</b>
-      {% for i in g.items %}<a class="navlink{% if i.key == nav %} on{% endif %}" href="{{ i.url }}" title="{{ i.label }}">{{ i.icon }}<span>{{ i.label }}</span></a>{% endfor %}
+      {% for i in g.items %}<a class="navlink{% if i.key == nav %} on{% endif %}" href="{{ i.url }}" title="{{ i.label }}">{{ i.icon }}<span>{{ i.label }}</span>{% if i.key == "binds" and binds_down %}<em class="navdot" title="{{ binds_down }} down"></em>{% endif %}</a>{% endfor %}
     </div>{% endfor %}
     <div class="topnav">{% for g in nav_groups %}<details><summary{% for i in g.items %}{% if i.key == nav %} class="on"{% endif %}{% endfor %}>{{ g.title }} ▾</summary>
       <div class="drop">{% for i in g.items %}<a href="{{ i.url }}">{{ i.label }}</a>{% endfor %}</div></details>{% endfor %}</div>
@@ -21,10 +21,10 @@
     <header class="topbar">
       <form class="search" action="/numbers/" method="get" role="search">
         <svg width="14" height="14" viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="1.6" aria-hidden="true"><circle cx="7" cy="7" r="5"/><path d="m11 11 3.5 3.5"/></svg>
-        <input type="search" name="q" id="globalsearch" placeholder="Find a number…" aria-label="Find a number">
+        <input type="search" name="q" id="globalsearch" placeholder="Find a number…" aria-label="Find a number" aria-keyshortcuts="Control+K Meta+K"><kbd class="kbd">Ctrl K</kbd>
       </form>
-      {% if not is_client_user %}<a class="binds" href="/binds/">{% if binds_down %}<span class="dot" style="background:var(--bad)"></span>{{ binds_down }} bind{{ binds_down|pluralize }} down{% else %}<span class="dot" style="background:var(--ok)"></span>All binds up{% endif %}</a>{% endif %}
-      <details class="user"><summary><i>{{ user.username|slice:":2"|upper }}</i><span>{{ user.username }}</span></summary>
+      {% if not is_client_user %}<a class="binds{% if binds_down %} down{% endif %}" href="/binds/">{% if binds_down %}<span class="dot" style="background:var(--bad)"></span>{{ binds_down }} bind{{ binds_down|pluralize }} down{% else %}<span class="dot" style="background:var(--ok)"></span>All binds up{% endif %}</a>{% endif %}
+      <details class="user"><summary><i>{{ user.username|slice:":2"|upper }}</i><span class="who">{{ user.username }}<small>{% if is_client_user %}Client{% elif user.is_superuser %}Administrator{% else %}Staff{% endif %}</small></span></summary>
         <form class="pop" method="post" action="/ui/">{% csrf_token %}
           <input type="hidden" name="back" value="{{ request.get_full_path }}">
           <label for="ui-cw">Colourway</label>
@@ -39,7 +39,7 @@
             <option value="rail" {% if ui_layout == "rail" %}selected{% endif %}>Icon rail</option></select>
           <button class="btn primary">Save</button>
         </form></details>
-      <form method="post" action="/logout/">{% csrf_token %}<button class="btn sm">Log out</button></form>
+      <form method="post" action="/logout/">{% csrf_token %}<button class="btn sm"><svg width="13" height="13" viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M6 2.5H3v11h3M10.5 5 13.5 8l-3 3M13.5 8H6.5"/></svg>Log out</button></form>
     </header>
     <main class="page">
       {% for m in messages %}<div class="flash{% if m.tags == 'error' %} error{% endif %}" role="status">{{ m }}</div>{% endfor %}
@@ -48,6 +48,7 @@
   </div>
 </div>
 <script>
+if(/Mac|iPhone|iPad/.test(navigator.platform)){const k=document.querySelector('.search .kbd');if(k)k.textContent='⌘K'}
 document.addEventListener('keydown',e=>{if((e.ctrlKey||e.metaKey)&&e.key.toLowerCase()==='k'){e.preventDefault();document.getElementById('globalsearch').focus()}});
 </script>
 <script>
