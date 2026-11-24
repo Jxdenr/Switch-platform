@@ -13,7 +13,7 @@
     <span class="help"><b id="free-count">{{ n_free|intcomma }}</b> free numbers match. Taken in number order.</span>
     {% for e in qform.quantity.errors %}<span class="err">{{ e }}</span>{% endfor %}</div>
 </div></section>
-<section class="card stack"><h2>To whom</h2>
+<section class="card stack formgrid"><h2>To whom</h2>
 {% include "partials/form.html" %}
 <details class="more" id="alloc-rules" {% if rules_form.errors %}open{% endif %}><summary>SMS blocking rules / limits for this client <span class="muted">(optional)</span></summary>
 <p class="muted small">These apply to all of the chosen client's numbers. Leave blank to keep the client's rules as they are.</p>

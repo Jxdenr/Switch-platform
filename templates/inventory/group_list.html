@@ -19,7 +19,7 @@
 <td class="num mono">{{ g.n_total }}</td><td class="num mono">{{ g.n_alloc }}</td><td class="num mono">{{ g|free }}</td>
 <td>{% if g.blocked %}<span class="pill bad">Blocked</span>{% elif g.active %}<span class="pill ok">Active</span>{% else %}<span class="pill free">Inactive</span>{% endif %}</td>
 <td class="mono muted">{{ g.last_used|date:"Y-m-d"|default:"—" }}</td>
-<td><a class="btn sm" href="/numbers/add/?group={{ g.pk }}">+ Numbers</a> <a class="btn sm" href="/billing-groups/{{ g.pk }}/edit/">Edit</a></td></tr>
+<td class="rowacts"><a href="/numbers/add/?group={{ g.pk }}">+ Numbers</a><a href="/billing-groups/{{ g.pk }}/edit/">Edit</a></td></tr>
 {% empty %}<tr><td colspan="13" class="empty">No billing groups match. Create one for each supplier range.</td></tr>{% endfor %}
 </tbody></table></div></form>
 {% include "partials/pager.html" %}

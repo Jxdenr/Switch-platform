@@ -286,3 +286,32 @@ td a{text-decoration:none}td a:hover{text-decoration:underline}
 .checklist>li>a.alert{color:var(--bad)}
 .checklist>li>a .end{margin-left:auto;font-weight:400;font-size:12.5px}
 @media (max-width:760px){.kbd{display:none}.infostrip-end{margin-left:0}}
+
+/* Stitch look carried to every screen (Nov 2026) */
+td{vertical-align:middle}td.wrap{vertical-align:top}
+.kpi span{font-size:22px;letter-spacing:-.01em}
+.crumbs{font-size:11px;text-transform:uppercase;letter-spacing:.06em;font-weight:600}
+.crumbs a{text-decoration:none}.crumbs a:hover{color:var(--accent);text-decoration:underline}
+.card h2,.panelhead h2{font-size:15px;letter-spacing:-.005em}
+/* tables inside a card run edge to edge: one frame, not a box in a box */
+.card>.tablewrap{border:0;border-radius:0;margin:0 -16px;border-top:1px solid var(--line);background:transparent}
+.card>.tablewrap:last-child{margin-bottom:-16px;border-radius:0 0 8px 8px}
+.card>.tablewrap th:first-child,.card>.tablewrap td:first-child{padding-left:16px}
+.card>.tablewrap th:last-child,.card>.tablewrap td:last-child{padding-right:16px}
+.card>p.muted{margin:0 0 10px}
+/* quiet row actions: links, not buttons, so wide tables fit */
+td.rowacts{text-align:right}td.rowacts a{text-decoration:none;font-weight:600;font-size:12.5px;margin-left:12px}td.rowacts a:hover{text-decoration:underline}
+/* long single-card forms: two columns instead of one very wide column */
+section.formgrid,form.formgrid{display:grid;grid-template-columns:repeat(auto-fit,minmax(280px,1fr));gap:14px 20px;align-items:start}
+.formgrid>h2,.formgrid>details,.formgrid>.errorlist,.formgrid>p{grid-column:1/-1}
+.formgrid>.field.check{align-self:center}
+.formgrid .field>select,.formgrid .field>input:not([type=checkbox]):not([type=radio]){width:100%}
+th{padding:9px 10px}td{padding:8px 10px}
+.grid2.panels{grid-template-columns:repeat(auto-fit,minmax(440px,1fr))}
+@media (max-width:760px){.grid2.panels{grid-template-columns:1fr}}
+/* a filter bar inside a card doesn't need its own frame */
+.card>.filters{border:0;padding:0 0 12px;background:transparent;border-radius:0}
+.card>.kpis{margin-bottom:12px}
+th{letter-spacing:.04em}td.rowacts a{margin-left:10px}td.rowacts a:first-child{margin-left:0}
+td.rowacts{padding-left:4px}
+.grid2>*,.dashgrid>*{min-width:0}

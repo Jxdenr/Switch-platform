@@ -7,10 +7,11 @@
 {% endblock %}
 {% block scripts %}<script>
 let last=0,paused=false;const body=document.getElementById('tk-body');
+const pillFor=s=>({forwarded:'ok',failed:'bad',received:'warn'}[String(s).toLowerCase()]||'free');
 const esc=s=>String(s).replace(/[&<>"]/g,c=>({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;'}[c]));
 async function poll(){if(paused)return;try{const r=await fetch('?format=json&after='+last);const d=await r.json();
  if(d.rows.length){if(!last)body.innerHTML='';d.rows.reverse().forEach(m=>{last=Math.max(last,m.id);const tr=document.createElement('tr');
- tr.innerHTML=`<td>${esc(m.at)}</td><td>${esc(m.client)}</td><td>${esc(m.source)}</td><td>+${esc(m.destination)}</td><td>${esc(m.status)}</td><td class="wrap">${esc(m.body)}</td>`;body.prepend(tr)});
+ tr.innerHTML=`<td>${esc(m.at)}</td><td>${esc(m.client)}</td><td>${esc(m.source)}</td><td>+${esc(m.destination)}</td><td><span class="pill ${pillFor(m.status)}">${esc(m.status)}</span></td><td class="wrap">${esc(m.body)}</td>`;body.prepend(tr)});
  while(body.children.length>200)body.lastChild.remove()}
  document.getElementById('tk-status').textContent='Updated '+new Date().toLocaleTimeString()}catch(e){document.getElementById('tk-status').textContent='Connection lost, retrying…'}}
 document.getElementById('tk-pause').onclick=e=>{paused=!paused;e.target.textContent=paused?'Resume':'Pause'};
