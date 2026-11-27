@@ -1,4 +1,4 @@
-{% extends "base.html" %}{% load switch humanize %}
+{% extends "base.html" %}{% load guide switch humanize %}
 {% block title %}Dashboard{% endblock %}
 {% block content %}
 <div class="pagehead"><div><h1>Dashboard</h1><div class="sub">{{ period_label }} · {% for k, l in channels %}{% if k == channel %}{{ l }}{% endif %}{% endfor %} · compared with the period before</div></div>
@@ -12,6 +12,8 @@
     <a href="/sms/blocking/">New blocking rule</a></div></details>
   <a class="btn primary" href="/numbers/allocate/">Allocate numbers</a>{% endif %}
 </div></div>
+{% page_help "dashboard" %}
+{% if can_change %}{% setup_checklist %}{% endif %}
 
 <div class="statrow">
   {% if not is_client %}{% if can_money %}
@@ -26,7 +28,7 @@
     {% else %}<span class="v {% if dl.sms_pct is not None and dl.sms_pct < 95 %}warn{% endif %}">{% if dl.sms_pct is not None %}{{ dl.sms_pct|floatformat:1 }}%{% else %}–{% endif %}</span>
       <small>{% if dl.sms_failed %}<a href="/sms/records/?status=failed">{{ dl.sms_failed|intcomma }} failed</a>{% else %}No failures{% endif %}{% if channel == "all" and dl.asr is not None %} · calls {{ dl.asr|floatformat:0 }}% answered{% endif %}</small>{% endif %}</div>
   {% if not is_client %}
-  <div class="stat"><b>Unrouted</b><span class="v {% if unrouted.total %}warn{% endif %}">{{ unrouted.total|intcomma }}</span>
+  <div class="stat"><b>Unrouted {% tip "unrouted" %}</b><span class="v {% if unrouted.total %}warn{% endif %}">{{ unrouted.total|intcomma }}</span>
     <small>{% if unrouted.total %}<a href="/sms/records/?status=no_route">To numbers with no client</a> · <a href="/numbers/allocate/">Allocate</a>{% else %}Everything had a client{% endif %}{% if unrouted.blocked %} · {{ unrouted.blocked|intcomma }} blocked{% endif %}</small></div>
   {% endif %}
 </div>

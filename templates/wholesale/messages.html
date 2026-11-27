@@ -1,8 +1,9 @@
-{% extends "base.html" %}{% load switch humanize %}
-{% block title %}Wholesale messages{% endblock %}
+{% extends "base.html" %}{% load guide switch humanize %}
+{% block title %}Outbound messages{% endblock %}
 {% block content %}
-<div class="pagehead"><div><h1>Wholesale messages</h1><div class="sub">{{ t.n|intcomma }} messages · {% if t.delivered_pct is not None %}{{ t.delivered_pct }}% delivered{% else %}no final statuses yet{% endif %} · charged {{ t.revenue|money }} {{ currency }}, vendor cost {{ t.cost|money }}</div></div>
+<div class="pagehead"><div><h1>Outbound messages</h1><div class="sub">{{ t.n|intcomma }} messages · {% if t.delivered_pct is not None %}{{ t.delivered_pct }}% delivered{% else %}no final statuses yet{% endif %} · charged {{ t.revenue|money }} {{ currency }}, vendor cost {{ t.cost|money }}</div></div>
 <div class="actions"><a class="btn" href="?{% qs_without 'page' %}&export=csv">Export CSV</a></div></div>
+{% page_help "ws_messages" %}
 <form class="filters" method="get">
   <label>Date range<input type="text" name="date_range" value="{{ date_range }}" size="34" class="mono"></label>
   <label>Customer<select name="customer"><option value="">All</option>{% for a in customers %}<option value="{{ a.pk }}" {% if f.customer == a.pk|stringformat:"s" %}selected{% endif %}>{{ a }}</option>{% endfor %}</select></label>
@@ -21,6 +22,6 @@
 {% if m.stat %}<span class="mono small">{{ m.stat }}{% if m.err %} {{ m.err }}{% endif %}</span>{% endif %}{% if m.reason %}<div class="muted small">{{ m.reason }}</div>{% endif %}</td>
 <td class="small">{% if m.dlr_state == "sent" %}Sent{% elif m.dlr_state == "none" %}<span class="muted">Not asked for</span>{% elif m.dlr_state == "failed" %}<span title="{{ m.dlr_error }}">Retrying</span>{% else %}{{ m.get_dlr_state_display }}{% endif %}</td>
 <td class="num mono">{{ m.charged|money }}</td><td class="muted small">{{ m.body|truncatechars:40 }}{% if m.part_total %} <span class="pill free">{{ m.part_num }}/{{ m.part_total }}</span>{% endif %}</td></tr>
-{% empty %}<tr><td colspan="10" class="empty">No wholesale messages in this range.</td></tr>{% endfor %}</tbody></table></div>
+{% empty %}{% empty_row 10 "ws_messages" %}{% endfor %}</tbody></table></div>
 {% include "partials/pager.html" %}
 {% endblock %}

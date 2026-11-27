@@ -145,3 +145,5 @@ Customers bind to the SMPP server (role "Wholesale customer") or use `POST /api/
 `router` service (`manage.py wholesale_router`, run exactly one) binds out to vendors, sends with failover
 and passes the vendors' real receipts back. Rules are in `docs/platform-knowledge.md` (Wholesale section).
 `manage.py demo_wholesale` adds fake example customers, vendors and a week of traffic.
+| Help on every page: one-line summary, a "Show key" panel of the words used, next-step buttons, (i) tooltips on jargon, empty states with a button to the fix, and a self-ticking "Get set up" checklist on the dashboard | Done, tested |
+| Outbound SMS: split traffic by percentage between vendors, daily message cap, duplicate refusal, low-delivery warning per customer, peak rate, per-destination results, failure codes per customer and vendor | Done, tested |

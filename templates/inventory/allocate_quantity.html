@@ -1,9 +1,10 @@
-{% extends "base.html" %}{% load switch humanize %}
+{% extends "base.html" %}{% load guide switch humanize %}
 {% block title %}Allocate a quantity{% endblock %}
 {% block content %}
 <div class="crumbs"><a href="/numbers/">Numbers</a> / Allocate a quantity</div>
 <div class="pagehead"><div><h1>Allocate a quantity</h1>
 <div class="sub">Give a client the next free numbers from a range in one go. No need to tick them on screen.</div></div></div>
+{% page_help "allocate" %}
 <form method="post" class="stack" style="max-width:none">{% csrf_token %}
 <section class="card"><h2>Which numbers</h2>
 <div class="grid-form">

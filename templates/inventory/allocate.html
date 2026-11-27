@@ -1,10 +1,11 @@
-{% extends "base.html" %}{% load switch humanize %}
+{% extends "base.html" %}{% load guide switch humanize %}
 {% block title %}Allocate numbers{% endblock %}
 
 {% block content %}
 <div class="crumbs"><a href="{{ back }}">Numbers</a> / Allocate</div>
 <div class="pagehead"><div><h1>Allocate {{ count|intcomma }} number{{ count|pluralize }}</h1>
 <div class="sub">{% if already %}{{ already|intcomma }} of these are already allocated and will move to the new client.{% else %}All selected numbers are free.{% endif %}</div></div></div>
+{% page_help "allocate" %}
 <form method="post" action="/numbers/bulk/" class="card stack">{% csrf_token %}
 {% for k, v in carry %}<input type="hidden" name="{{ k }}" value="{{ v }}">{% endfor %}
 <input type="hidden" name="action" value="allocate"><input type="hidden" name="confirm" value="1"><input type="hidden" name="back" value="{{ back }}">

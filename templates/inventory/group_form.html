@@ -1,9 +1,10 @@
-{% extends "base.html" %}
+{% extends "base.html" %}{% load guide %}
 {% block title %}{% if obj %}Edit {{ obj.title }}{% else %}New billing group{% endif %}{% endblock %}
 {% block content %}
 <div class="crumbs"><a href="/billing-groups/">Billing groups</a>{% if obj %} / {{ obj.title }}{% endif %}</div>
 <div class="pagehead"><div><h1>{% if obj %}Edit {{ obj.title }}{% else %}New billing group{% endif %}</h1>
 <div class="sub">One supplier range: who it's from, what it's used for, and what the supplier pays.</div></div></div>
+{% page_help "group_form" %}
 <form method="post" class="stack" style="max-width:900px">{% csrf_token %}
 {% if form.non_field_errors or rates.non_form_errors %}<ul class="errorlist">{% for e in form.non_field_errors %}<li>{{ e }}</li>{% endfor %}{% for e in rates.non_form_errors %}<li>{{ e }}</li>{% endfor %}</ul>{% endif %}
 

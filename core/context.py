@@ -49,7 +49,7 @@ NAV = [
              ("ticker", "Live ticker", "/sms/ticker/", "live", ("sms", "client")),
              ("stats", "SMS stats", "/sms/stats/", "stat", ("sms", "money")),
              ("blocking", "Blocking rules", "/sms/blocking/", "block", "sms")]),
-    ("Wholesale", [("ws_overview", "Overview", "/wholesale/", "home", "wholesale"),
+    ("Outbound SMS", [("ws_overview", "Overview", "/wholesale/", "home", "wholesale"),
                    ("ws_messages", "Messages", "/wholesale/messages/", "msg", "wholesale"),
                    ("ws_quality", "Vendor quality", "/wholesale/quality/", "stat", "wholesale"),
                    ("ws_routes", "Route plans", "/wholesale/routes/", "grp", "wholesale"),

@@ -55,10 +55,13 @@ class RoutePlan(TenantOwned):
     """A named set of routes, e.g. "Premium" or "Standard". Each customer uses one plan.
 
     Least cost: cheapest vendor first. Priority: the order you set. Best delivery: the vendor
-    with the highest real delivery rate on that country in the last 24 hours first."""
+    with the highest real delivery rate on that country in the last 24 hours first. Split: each
+    message picks a vendor at random weighted by each entry's share (e.g. 70 / 30); the others
+    stay as failover, cheapest first."""
 
-    LCR, PRIORITY, QUALITY = "lcr", "priority", "quality"
-    MODES = [(LCR, "Least cost"), (PRIORITY, "Priority order"), (QUALITY, "Best delivery rate")]
+    LCR, PRIORITY, QUALITY, SPLIT = "lcr", "priority", "quality", "split"
+    MODES = [(LCR, "Least cost"), (PRIORITY, "Priority order"), (QUALITY, "Best delivery rate"),
+             (SPLIT, "Split by percentage")]
 
     title = models.CharField(max_length=60)
     mode = models.CharField(max_length=8, choices=MODES, default=LCR)
@@ -85,6 +88,9 @@ class RouteEntry(TenantOwned):
                                 help_text="Blank = all networks in the country")
     vendor = models.ForeignKey("crm.Account", on_delete=models.CASCADE, related_name="route_entries")
     priority = models.PositiveSmallIntegerField(default=1, help_text="1 is tried first (priority mode)")
+    share = models.PositiveSmallIntegerField(
+        "Share (%)", null=True, blank=True,
+        help_text="Split mode: this vendor's share of the traffic, e.g. 70. Blank = failover only.")
 
     class Meta:
         ordering = ["plan", "country__name", "priority"]
@@ -114,7 +120,19 @@ class Customer(TenantOwned):
     allowed_senders = models.CharField(
         max_length=500, blank=True,
         help_text="Comma separated sender IDs this customer may use. Blank = any (blocking rules still apply).")
-    low_balance_alert = models.DecimalField(max_digits=14, decimal_places=2, null=True, blank=True)
+    low_balance_alert = models.DecimalField(max_digits=14, decimal_places=2, null=True, blank=True,
+                                            help_text="Show a warning when the balance falls below this.")
+    daily_limit = models.PositiveIntegerField(
+        "Daily message cap", null=True, blank=True,
+        help_text="Refuse traffic after this many messages in a day (midnight to midnight). Blank = no cap.")
+    duplicate_minutes = models.PositiveSmallIntegerField(
+        "Refuse duplicates within (minutes)", null=True, blank=True,
+        help_text="Refuse the same text to the same number again within this many minutes. "
+                  "Stops loops and double sends. Blank = off.")
+    delivery_alert_pct = models.PositiveSmallIntegerField(
+        "Warn if delivered falls under (%)", null=True, blank=True,
+        help_text="Flags this customer on the overview when their real delivered rate over the last "
+                  "24 hours drops below this (after 50+ messages). Blank = no warning.")
 
     class Meta:
         verbose_name = "wholesale customer"

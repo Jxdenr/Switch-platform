@@ -60,6 +60,7 @@ document.addEventListener('keydown',e=>{if((e.ctrlKey||e.metaKey)&&e.key.toLower
   if(a&&new URL(a.href,location.href).pathname===location.pathname){try{sessionStorage.setItem(k,String(scrollY))}catch(e){}}});
 })();
 </script>
+<script src="{% static 'js/guide.js' %}" defer></script>
 {% block scripts %}{% endblock %}
 </body>
 </html>

@@ -1,9 +1,10 @@
-{% extends "base.html" %}
+{% extends "base.html" %}{% load guide %}
 {% block title %}{% if kind == "supplier" %}Suppliers{% else %}Clients{% endif %}{% endblock %}
 {% block content %}
 <div class="pagehead"><div><h1>{% if kind == "supplier" %}Suppliers{% else %}Clients{% endif %}</h1>
 <div class="sub">{{ accounts|length }} {% if kind == "supplier" %}supplier{% else %}client{% endif %}{{ accounts|length|pluralize }}{% if kind == "supplier" %} · they send traffic to our numbers and pay us{% else %} · we pass traffic to them and pay them{% endif %}</div></div>
 <div class="actions"><a class="btn primary" href="/accounts/new/?kind={{ kind }}">+ New {{ kind }}</a></div></div>
+{% page_help %}
 <form class="filters" method="get">
   <label>Search<input type="text" name="q" id="f-q" value="{{ q }}" placeholder="Name or tag"></label>
   <button class="btn">Search</button>
@@ -17,6 +18,6 @@
 {% else %}<td class="num mono">{{ a.n_numbers }}</td><td>{% if a.n_http %}HTTP{% endif %}{% if a.n_http and a.n_smpp %} + {% endif %}{% if a.n_smpp %}SMPP{% endif %}{% if not a.n_http and not a.n_smpp %}<span class="pill bad">Not set up</span>{% endif %}</td>{% endif %}
 <td>{% if a.auto_statements and a.billing_email %}<span class="pill ok">Monthly email</span>{% else %}<span class="muted">Manual</span>{% endif %}</td>
 <td>{% if a.active %}<span class="pill ok">Active</span>{% else %}<span class="pill free">Inactive</span>{% endif %}</td></tr>
-{% empty %}<tr><td colspan="8" class="empty">No {{ kind }}s yet.</td></tr>{% endfor %}
+{% empty %}{% if kind == "supplier" %}{% empty_row 8 "suppliers" %}{% else %}{% empty_row 8 "clients" %}{% endif %}{% endfor %}
 </tbody></table></div>
 {% endblock %}

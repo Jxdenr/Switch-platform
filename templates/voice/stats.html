@@ -1,7 +1,8 @@
-{% extends "base.html" %}{% load switch humanize %}
+{% extends "base.html" %}{% load guide switch humanize %}
 {% block title %}Voice stats{% endblock %}
 {% block content %}
 <div class="pagehead"><div><h1>Voice stats</h1><div class="sub">{{ date_range }}</div></div></div>
+{% page_help "voicestats" %}
 <form class="filters" method="get">
   <label>Date range<input type="text" name="date_range" id="vs-date" value="{{ date_range }}" size="34"></label>
   <label>Group by<select name="by" id="vs-by">
@@ -19,6 +20,6 @@
 {% if by == "supplier_client" %}<td>{{ r.supplier__title|default:"—" }}</td><td>{{ r.client__title|default:"—" }}</td><td>{{ r.payment_terms }}</td>{% elif by == "supplier" %}<td>{{ r.supplier__title|default:"—" }}</td>{% elif by == "client" %}<td>{{ r.client__title|default:"—" }}</td>{% elif by == "group" %}<td>{{ r.billing_group__title|default:"—" }}</td><td>{{ r.supplier__title|default:"—" }}</td>{% else %}<td>{{ r.start_stamp__date|date:"Y-m-d" }}</td>{% endif %}
 <td>{{ r.currency }}</td><td class="num">{{ r.calls|intcomma }}</td><td class="num">{{ r.connected|intcomma }}</td><td class="num">{{ r.asr|floatformat:1 }}</td><td class="num">{{ r.acd|floatformat:0 }}s</td><td class="num">{{ r.minutes|floatformat:1|intcomma }}</td>
 <td class="num">{{ r.due_in|money }}</td><td class="num">{{ r.due_out|money }}</td><td class="num">{{ r.margin|money }}</td><td class="num">{{ r.pct|floatformat:1 }}</td></tr>
-{% empty %}<tr><td colspan="14" class="empty">No calls in this range.</td></tr>{% endfor %}
+{% empty %}{% empty_row 14 "cdrs" %}{% endfor %}
 </tbody></table></div>
 {% endblock %}

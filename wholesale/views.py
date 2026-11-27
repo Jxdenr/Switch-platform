@@ -19,7 +19,7 @@ from crm.models import Account, SmppUser
 from sms.views import _date_range
 from .models import (ApiKey, BuyRate, Customer, LedgerEntry, Network, NetworkPrefix, OutboundMessage as M, RouteEntry,
                      RoutePlan, SellRate, SmppTestSettings, Vendor, VendorBind, wholesale_currency)
-from .quality import vendor_quality
+from .quality import by_country, pct, refusal_reasons, top_failures, vendor_quality
 
 
 def _today():
@@ -48,12 +48,26 @@ def overview(request):
         n_binds=Count("account__vendor_binds", filter=Q(account__vendor_binds__enabled=True), distinct=True),
         n_up=Count("account__vendor_binds", filter=Q(account__vendor_binds__enabled=True,
                                                     account__vendor_binds__bound=True), distinct=True)))
+    # Real delivered % per customer, for the "warn if under" setting
+    dq = {r["customer_id"]: r for r in live.values("customer_id").annotate(
+        final=Count("pk", filter=Q(status__in=M.FINAL)), ok=Count("pk", filter=Q(status=M.DELIVERED)))}
+    customers = list(customers)
+    for c in customers:
+        r = dq.get(c.account_id)
+        c.delivered_pct = pct(r["ok"], r["final"]) if r else None
+        c.delivery_low = bool(c.delivery_alert_pct and r and r["final"] >= 50
+                              and c.delivered_pct < c.delivery_alert_pct)
+    # Busiest minute in the last 24 hours (submitted by customers, live)
+    from django.db.models.functions import TruncMinute
+    peak = (live.exclude(status=M.REFUSED).annotate(m=TruncMinute("created_at")).values("m")
+            .annotate(c=Count("pk")).order_by("-c").first())
     q = {r["vendor"].account_id: r for r in vendor_quality(days=1)}
     for v in vendors:
         v.q = q.get(v.account_id)
     return render(request, "wholesale/overview.html", {
         "nav": "ws_overview", "t": totals(live), "customers": customers, "vendors": vendors,
         "currency": wholesale_currency(), "queued": M.objects.filter(status=M.QUEUED).count(),
+        "peak_min": peak["c"] if peak else 0, "peak_sec": round(peak["c"] / 60, 1) if peak else 0, "peak_at": peak["m"] if peak else None,
         "waiting": M.objects.filter(status=M.SUBMITTED).count(),
         "dlr_backlog": M.objects.filter(dlr_state__in=[M.DLR_PENDING, M.DLR_FAILED]).count()})
 
@@ -107,18 +121,22 @@ class PlanForm(forms.ModelForm):
     class Meta:
         model = RoutePlan
         fields = ["title", "mode", "min_delivery_pct", "notes"]
+        widgets = {"notes": forms.TextInput(attrs={"placeholder": "Optional, e.g. OTP traffic only"})}
 
 
 class EntryForm(forms.ModelForm):
     class Meta:
         model = RouteEntry
-        fields = ["country", "network", "vendor", "priority"]
+        fields = ["country", "network", "vendor", "priority", "share"]
+        widgets = {"priority": forms.NumberInput(attrs={"size": 3, "style": "width:5em"}),
+                   "share": forms.NumberInput(attrs={"style": "width:5em", "placeholder": "e.g. 70"})}
 
     def __init__(self, *a, **kw):
         super().__init__(*a, **kw)
         self.fields["vendor"].queryset = Account.objects.filter(wholesale_vendor__isnull=False)
         self.fields["country"].empty_label = "All countries"
         self.fields["network"].empty_label = "All networks"
+        self.fields["vendor"].empty_label = "Choose a vendor"
 
 
 @require("wholesale")
@@ -144,8 +162,13 @@ def routes(request):
             else:
                 messages.error(request, "Choose a vendor.")
             return redirect(request.get_full_path())
-    plans = RoutePlan.objects.prefetch_related("entries__country", "entries__network", "entries__vendor").annotate(
-        n_customers=Count("customer"))
+    plans = list(RoutePlan.objects.prefetch_related("entries__country", "entries__network", "entries__vendor")
+                 .annotate(n_customers=Count("customer")))
+    for p in plans:
+        groups = {}
+        for e in p.entries.all():  # shares split traffic within one destination
+            groups[(e.country_id, e.network_id)] = groups.get((e.country_id, e.network_id), 0) + (e.share or 0)
+        p.split_total = next((t for t in groups.values() if t and t != 100), None)
     return render(request, "wholesale/routes.html", {"nav": "ws_routes", "plans": plans, "plan_form": plan_form,
                                                      "entry_form": EntryForm()})
 
@@ -198,9 +221,21 @@ def import_networks(text):
 class CustomerForm(forms.ModelForm):
     class Meta:
         model = Customer
-        fields = ["enabled", "route_plan", "charge_on", "credit_limit", "allow_loss", "allowed_senders",
-                  "low_balance_alert"]
+        fields = ["enabled", "route_plan", "charge_on", "credit_limit", "low_balance_alert", "daily_limit",
+                  "duplicate_minutes", "delivery_alert_pct", "allow_loss", "allowed_senders"]
         widgets = {"charge_on": forms.RadioSelect}
+
+
+CUSTOMER_SECTIONS = [
+    ("Routing and billing", ["enabled", "route_plan", "charge_on", "allow_loss"]),
+    ("Credit", ["credit_limit", "low_balance_alert"]),
+    ("Limits and protection", ["daily_limit", "duplicate_minutes", "allowed_senders"]),
+    ("Alerts", ["delivery_alert_pct"]),
+]
+
+
+def customer_sections(form):
+    return [(title, [form[f] for f in names]) for title, names in CUSTOMER_SECTIONS]
 
 
 class VendorForm(forms.ModelForm):
@@ -258,6 +293,7 @@ def account(request, pk):
     since = _today() - timedelta(days=29)
     ctx = {"acc": acc, "cust": cust, "vend": vend, "nav": acc.nav_key, "currency": wholesale_currency(),
            "customer_form": CustomerForm(instance=cust) if cust else None,
+           "customer_sections": customer_sections(CustomerForm(instance=cust)) if cust else [],
            "vendor_form": VendorForm(instance=vend) if vend else None, "topup_form": TopUpForm(),
            "smpp_users": SmppUser.objects.filter(account=acc, role=SmppUser.WHOLESALE).select_related("wholesale"),
            "keys": ApiKey.objects.filter(account=acc), "binds": VendorBind.objects.filter(account=acc),
@@ -265,6 +301,12 @@ def account(request, pk):
            "buy_rates": BuyRate.objects.filter(account=acc).select_related("country", "network"),
            "ledger": cust.ledger.select_related("user")[:20] if cust else [],
            "sent30": totals(M.objects.filter(customer=acc, created_at__gte=since, test=False)) if cust else None,
+           "countries30": by_country(M.objects.filter(customer=acc, created_at__gte=since, test=False)) if cust else [],
+           "refusals30": refusal_reasons(M.objects.filter(customer=acc, created_at__gte=since)) if cust else [],
+           "failures30": top_failures(M.objects.filter(customer=acc, created_at__gte=since, test=False), 5)
+           if cust else [],
+           "vendor_failures30": top_failures(M.objects.filter(vendor=acc, created_at__gte=since, test=False), 5)
+           if vend else [],
            "carried30": totals(M.objects.filter(vendor=acc, created_at__gte=since, test=False)) if vend else None}
     return render(request, "wholesale/account.html", ctx)
 
