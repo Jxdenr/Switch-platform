@@ -1,0 +1,7 @@
+{% if not all_done %}<button type="button" class="btn sm setup-show" data-setup-show hidden>Show setup steps</button>
+<section class="card setup" id="setup" data-setup>
+<div class="panelhead"><h2>Get set up</h2><span class="muted small">Follow the steps in order. Each one ticks itself off when it's done.</span><button type="button" class="btn sm" data-setup-hide>Hide</button></div>
+<div class="setup-tracks">{% for t in tracks %}<div class="setup-track"><div class="setup-title"><b>{{ t.title }}</b><span class="muted small">{{ t.done }} of {{ t.total }} done</span></div>
+<div class="setup-bar" role="progressbar" aria-valuemin="0" aria-valuemax="{{ t.total }}" aria-valuenow="{{ t.done }}"><i style="width:{% widthratio t.done t.total 100 %}%"></i></div>
+<ol class="setup-steps">{% for label, done, url, why in t.steps %}<li class="{% if done %}done{% elif t.next.0 == label %}next{% endif %}"><span class="tick" aria-hidden="true">{% if done %}✓{% else %}{{ forloop.counter }}{% endif %}</span><div><a href="{{ url }}">{{ label }}</a><small>{{ why }}</small></div>{% if t.next.0 == label %}<a class="btn primary sm" href="{{ url }}">Start</a>{% endif %}</li>{% endfor %}</ol></div>{% endfor %}</div>
+</section>{% endif %}

@@ -1,8 +1,9 @@
-{% extends "base.html" %}
+{% extends "base.html" %}{% load guide %}
 {% block title %}Live ticker{% endblock %}
 {% block content %}
 <div class="pagehead"><div><h1>Live ticker</h1><div class="sub" id="tk-status">Updating every 3 seconds</div></div>
 <div class="actions"><button class="btn" id="tk-pause" type="button">Pause</button></div></div>
+{% page_help "ticker" %}
 <div class="tablewrap ticker"><table><thead><tr><th>Time</th><th>Client</th><th>Source</th><th>Destination</th><th>Status</th><th>Message</th></tr></thead><tbody id="tk-body"><tr><td colspan="6" class="empty">Waiting for messages…</td></tr></tbody></table></div>
 {% endblock %}
 {% block scripts %}<script>

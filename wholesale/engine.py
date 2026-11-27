@@ -78,15 +78,16 @@ class Candidate:
     buy_rate: Decimal
     priority: int = 1
     delivery: float | None = None
+    share: int | None = None
 
 
-def candidates(customer: Customer, country, network, sell_rate, exclude=()):
+def candidates(customer: Customer, country, network, sell_rate, exclude=(), rng=random):
     """Vendors that may carry this message, best first."""
     plan = customer.route_plan
     vendors = {v.account_id for v in Vendor.objects.filter(enabled=True)}
     with_binds = set(VendorBind.objects.filter(enabled=True).values_list("account_id", flat=True))
     allowed = (vendors & with_binds) - set(exclude)
-    prio = {}
+    prio, shares = {}, {}
     if plan:
         entries = list(RouteEntry.objects.filter(plan=plan).filter(Q(country=country) | Q(country__isnull=True))
                        .filter(Q(network=network) | Q(network__isnull=True)))
@@ -97,6 +98,7 @@ def candidates(customer: Customer, country, network, sell_rate, exclude=()):
                       (spec == "any" and not e.country_id)]
             if chosen:
                 prio = {e.vendor_id: e.priority for e in chosen}
+                shares = {e.vendor_id: e.share for e in chosen if e.share}
                 break
         allowed &= set(prio)
     out = []
@@ -106,7 +108,7 @@ def candidates(customer: Customer, country, network, sell_rate, exclude=()):
             continue
         if not customer.allow_loss and buy >= sell_rate:
             continue
-        out.append(Candidate(vid, buy, prio.get(vid, 1)))
+        out.append(Candidate(vid, buy, prio.get(vid, 1), share=shares.get(vid)))
     if not out:
         return out
     stats = recent_delivery([c.vendor_id for c in out], country)
@@ -121,9 +123,29 @@ def candidates(customer: Customer, country, network, sell_rate, exclude=()):
         out.sort(key=lambda c: (c.priority, c.buy_rate))
     elif mode == "quality":
         out.sort(key=lambda c: (-(c.delivery if c.delivery is not None else -1), c.buy_rate))
+    elif mode == "split":
+        out = weighted_order(out, rng)
     else:
         out.sort(key=lambda c: (c.buy_rate, c.priority))
     return out
+
+
+def weighted_order(cands, rng=random):
+    """Split mode: pick the first vendor at random by share (70/30 sends about 70% of messages to the
+    first), then the rest by share, then vendors without a share cheapest first as failover."""
+    cands = sorted(cands, key=lambda c: c.buy_rate)
+    weighted = [c for c in cands if c.share]
+    rest = [c for c in cands if not c.share]
+    ordered = []
+    while weighted:
+        r = rng.random() * sum(c.share for c in weighted)
+        for c in weighted:
+            r -= c.share
+            if r < 0:
+                break
+        weighted.remove(c)
+        ordered.append(c)
+    return ordered + rest
 
 
 # ---------- accept or refuse ----------
@@ -181,6 +203,18 @@ def accept(account, fields, smpp_user=None, api_key=None):
         return refuse(RINVSRCADR, "Sender ID is missing")
     if not customer.sender_allowed(msg.source):
         return refuse(RINVSRCADR, f"Sender ID {msg.source} is not on this customer's allowed list")
+    if customer.daily_limit and not is_test:
+        midnight = timezone.localtime(now).replace(hour=0, minute=0, second=0, microsecond=0)
+        sent_today = M.objects.filter(customer=account, created_at__gte=midnight, test=False).exclude(
+            status=M.REFUSED).count()
+        if sent_today >= customer.daily_limit:
+            return refuse(RTHROTTLED, f"Daily cap of {customer.daily_limit} messages reached")
+    if customer.duplicate_minutes and msg.body:
+        if M.objects.filter(customer=account, destination=dest, body=msg.body, part_num=msg.part_num,
+                            created_at__gte=now - timedelta(minutes=customer.duplicate_minutes)).exclude(
+                status=M.REFUSED).exists():
+            return refuse(RSUBMITFAIL, f"Duplicate: same text to this number in the last "
+                                       f"{customer.duplicate_minutes} min")
     rule = check_rules(account, msg.source, dest, msg.body, now)
     if rule:
         return refuse(RSUBMITFAIL, f"Blocked by rule: {rule}", rule)

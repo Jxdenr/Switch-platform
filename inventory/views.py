@@ -502,7 +502,7 @@ def allocate_quantity(request):
     data = request.POST if request.method == "POST" else None
     qform = QuantityForm(data, initial={"billing_group": request.GET.get("group") or None,
                                         "country": request.GET.get("country") or None})
-    form = AllocateForm(data)
+    form = AllocateForm(data, initial={"client": request.GET.get("client") or None})
     rules_form = R.QuickRulesForm(data, prefix="rules")
     g = qform["billing_group"].value()
     c = qform["country"].value()

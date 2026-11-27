@@ -1,40 +1,53 @@
-{% extends "base.html" %}{% load switch humanize %}
-{% block title %}{{ acc }} · Wholesale{% endblock %}
+{% extends "base.html" %}{% load guide switch humanize %}
+{% block title %}{{ acc }} · Outbound SMS{% endblock %}
 {% block content %}
-<div class="crumbs"><a href="{{ acc.list_url }}">{{ acc.list_label }}</a> / <a href="/accounts/{{ acc.pk }}/">{{ acc }}</a> / Wholesale</div>
-<div class="pagehead"><div><h1>{{ acc }}</h1><div class="sub">Wholesale{% if cust %} customer{% endif %}{% if cust and vend %} and{% endif %}{% if vend %} vendor{% endif %} · all amounts in {{ currency }}</div></div>
+<div class="crumbs"><a href="{{ acc.list_url }}">{{ acc.list_label }}</a> / <a href="/accounts/{{ acc.pk }}/">{{ acc }}</a> / Outbound SMS</div>
+<div class="pagehead"><div><h1>{{ acc }}</h1><div class="sub">Outbound SMS{% if cust %} customer{% endif %}{% if cust and vend %} and{% endif %}{% if vend %} vendor{% endif %} · all amounts in {{ currency }}</div></div>
 <div class="actions">{% if cust %}<a class="btn" href="/wholesale/messages/?customer={{ acc.pk }}">Messages sent</a>{% endif %}{% if vend %}<a class="btn" href="/wholesale/messages/?vendor={{ acc.pk }}">Messages carried</a>{% endif %}</div></div>
-<nav class="tabs"><a href="/accounts/{{ acc.pk }}/">SMS connections</a><a href="/accounts/{{ acc.pk }}/?tab=voice">Voice</a><a class="on" href="">Wholesale</a><a href="/accounts/{{ acc.pk }}/?tab=details">Contacts &amp; details</a><a href="/accounts/{{ acc.pk }}/?tab=statement">Statement</a></nav>
+{% page_help "ws_account" %}
+<nav class="tabs"><a href="/accounts/{{ acc.pk }}/">SMS connections</a><a href="/accounts/{{ acc.pk }}/?tab=voice">Voice</a><a class="on" href="">Outbound SMS</a><a href="/accounts/{{ acc.pk }}/?tab=details">Contacts &amp; details</a><a href="/accounts/{{ acc.pk }}/?tab=statement">Statement</a></nav>
 
 {% if not cust or not vend %}<div class="card" style="margin-bottom:16px"><form method="post" style="display:flex;gap:8px;flex-wrap:wrap;align-items:center">{% csrf_token %}
-{% if not cust %}<button class="btn primary" name="action" value="enable_customer">Make wholesale customer</button><span class="muted small">They bind to us and send traffic. Starts prepaid with balance 0.</span>{% endif %}
-{% if not vend %}<button class="btn" name="action" value="enable_vendor">Make vendor</button><span class="muted small">We bind to them and send traffic their way.</span>{% endif %}</form></div>{% endif %}
+{% if not cust %}<button class="btn primary" name="action" value="enable_customer">Make wholesale customer</button><span class="muted small">They connect to us and send messages. Starts prepaid with balance 0.</span>{% endif %}
+{% if not vend %}<button class="btn" name="action" value="enable_vendor">Make vendor</button><span class="muted small">We connect to them and send messages their way.</span>{% endif %}</form></div>{% endif %}
 
 {% if cust %}
 <h2 style="margin:8px 0 10px">As a customer</h2>
 <div class="statrow" style="margin-bottom:16px">
-<div class="stat accent"><b>Balance</b><span class="v">{{ cust.balance|money }}</span><small>{% if cust.credit_limit %}Credit limit {{ cust.credit_limit|money }} · can still spend {{ cust.available|money }}{% else %}Prepaid: traffic stops at 0{% endif %}</small></div>
+<div class="stat accent"><b>Balance {% tip "balance" %}</b><span class="v">{{ cust.balance|money }}</span><small>{% if cust.credit_limit %}Credit limit {{ cust.credit_limit|money }} · can still spend {{ cust.available|money }}{% else %}Prepaid: traffic stops at 0{% endif %}</small></div>
 <div class="stat"><b>Last 30 days</b><span class="v">{{ sent30.n|intcomma }}</span><small>{% if sent30.delivered_pct is not None %}{{ sent30.delivered_pct }}% delivered · {% endif %}{{ sent30.refused|intcomma }} refused</small></div>
-<div class="stat"><b>Margin, 30 days</b><span class="v">{{ sent30.margin|money }}</span><small>Charged {{ sent30.revenue|money }} · vendor cost {{ sent30.cost|money }}</small></div>
+<div class="stat"><b>Margin, 30 days {% tip "margin" %}</b><span class="v">{{ sent30.margin|money }}</span><small>Charged {{ sent30.revenue|money }} · vendor cost {{ sent30.cost|money }}</small></div>
 </div>
 <div class="grid2 panels">
-<form method="post" class="card stack">{% csrf_token %}<input type="hidden" name="action" value="customer"><h2>Settings</h2>{% include "partials/form.html" with form=customer_form %}<div><button class="btn primary">Save</button></div></form>
+<form method="post" class="card stack">{% csrf_token %}<input type="hidden" name="action" value="customer"><h2>Settings</h2>{% include "partials/fieldset.html" with sections=customer_sections %}<div><button class="btn primary">Save</button></div></form>
 <div class="stack">
 <form method="post" class="card stack">{% csrf_token %}<input type="hidden" name="action" value="topup"><h2>Add credit / payment</h2>{% include "partials/form.html" with form=topup_form %}<div><button class="btn">Add to balance</button></div>
 {% if ledger %}<div class="tablewrap"><table><thead><tr><th>Date</th><th class="num">Amount</th><th>Note</th></tr></thead><tbody>{% for l in ledger %}<tr><td class="mono muted">{{ l.at|date:"d M Y" }}</td><td class="num mono">{{ l.amount|money }}</td><td>{{ l.note }}{% if l.user %} <span class="muted small">{{ l.user }}</span>{% endif %}</td></tr>{% endfor %}</tbody></table></div>{% endif %}</form>
 <section class="card"><div class="panelhead"><h2>SMPP binds</h2><a class="btn sm" href="/accounts/{{ acc.pk }}/smpp-user/new/">+ Add</a></div>
 <p class="muted small" style="margin-top:0">Add an SMPP user with the role "Wholesale customer". Receipts go back on any of their receiver or transceiver binds.</p>
-<div class="tablewrap"><table><thead><tr><th>Bind</th><th class="num">Max/s</th><th>Mode</th><th>Status</th><th></th></tr></thead><tbody>
+<div class="tablewrap"><table><thead><tr><th>Bind</th><th class="num">Max/s {% tip "tps" %}</th><th>Mode {% tip "test" %}</th><th>Status</th><th></th></tr></thead><tbody>
 {% for u in smpp_users %}<tr><td>{{ u.title }} <span class="mono muted">{{ u.username }}</span></td><td class="num mono">{{ u.wholesale.tps|default:20 }}</td><td>{% if u.wholesale.test_mode %}<span class="pill warn">Test: {{ u.wholesale.test_delivered_pct }}% delivered</span>{% else %}Live{% endif %}</td>
 <td>{% if not u.enabled %}<span class="pill free">Disabled</span>{% elif u.bound %}<span class="pill ok">Bound</span>{% else %}<span class="pill bad">Not bound</span>{% endif %}</td><td class="rowacts"><a href="/wholesale/smpp/{{ u.pk }}/">Speed &amp; test</a> <a href="/accounts/{{ acc.pk }}/smpp-user/{{ u.pk }}/">Edit</a></td></tr>
-{% empty %}<tr><td colspan="5" class="empty">None yet.</td></tr>{% endfor %}</tbody></table></div></section>
+{% empty %}<tr><td colspan="5" class="empty"><div class="emptystate"><span>No SMPP connection yet.</span><a class="btn primary sm" href="/accounts/{{ acc.pk }}/smpp-user/new/">Add an SMPP login</a></div></td></tr>{% endfor %}</tbody></table></div></section>
 <section class="card"><div class="panelhead"><h2>HTTP keys</h2><a class="btn sm" href="/accounts/{{ acc.pk }}/wholesale-key/new/">+ Add</a></div>
 <p class="muted small" style="margin-top:0">POST <span class="mono">/api/wholesale/send/</span> with header X-Api-Key and to, from, text. Receipts are POSTed to the DLR callback URL.</p>
 <div class="tablewrap"><table><thead><tr><th>Key</th><th class="num">Max/s</th><th>Mode</th><th>Receipts to</th><th></th></tr></thead><tbody>
 {% for k in keys %}<tr><td>{{ k.title }}{% if not k.enabled %} <span class="pill free">Disabled</span>{% endif %}</td><td class="num mono">{{ k.tps }}</td><td>{% if k.test_mode %}<span class="pill warn">Test: {{ k.test_delivered_pct }}% delivered</span>{% else %}Live{% endif %}</td><td class="muted small">{{ k.dlr_url|default:"No receipts"|truncatechars:30 }}</td><td class="rowacts"><a href="/accounts/{{ acc.pk }}/wholesale-key/{{ k.pk }}/">Edit</a></td></tr>
-{% empty %}<tr><td colspan="5" class="empty">None yet.</td></tr>{% endfor %}</tbody></table></div></section>
+{% empty %}<tr><td colspan="5" class="empty"><div class="emptystate"><span>No HTTP key yet. Only needed if they send over HTTP instead of SMPP.</span><a class="btn sm" href="/accounts/{{ acc.pk }}/wholesale-key/new/">Create an HTTP key</a></div></td></tr>{% endfor %}</tbody></table></div></section>
 </div></div>
 {% include "wholesale/_rates.html" with rates=sell_rates side="sell" title="Sell rates (they pay us)" kind="sell-rate" %}
+{% if countries30 or refusals30 or failures30 %}<div class="grid2 panels" style="margin-top:16px">
+<section class="card"><div class="panelhead"><h2>By destination, 30 days</h2></div>
+<div class="tablewrap"><table><thead><tr><th>Country</th><th class="num">Sent</th><th class="num">Delivered {% tip "delivered_pct" %}</th><th class="num">No receipt {% tip "no_receipt" %}</th><th class="num">Charged</th><th class="num">Margin {% tip "margin" %}</th></tr></thead><tbody>
+{% for r in countries30 %}<tr><td>{{ r.country }}</td><td class="num mono">{{ r.sent|intcomma }}</td><td class="num mono">{% if r.delivered_pct is not None %}{{ r.delivered_pct }}%{% else %}—{% endif %}</td><td class="num mono">{% if r.no_receipt_pct is not None %}{{ r.no_receipt_pct }}%{% else %}—{% endif %}</td><td class="num mono">{{ r.charged|money }}</td><td class="num mono">{{ r.margin|money }}</td></tr>
+{% empty %}<tr><td colspan="6" class="empty">No live messages yet.</td></tr>{% endfor %}</tbody></table></div></section>
+<section class="card"><div class="panelhead"><h2>Why messages didn't go, 30 days</h2></div>
+<p class="muted small" style="margin-top:0">Refused by us: turned away before sending, not charged. Failed: the vendor's receipt said it wasn't delivered.</p>
+<div class="tablewrap"><table><thead><tr><th>Refused by us</th><th class="num">Messages</th></tr></thead><tbody>
+{% for reason, n in refusals30 %}<tr><td class="small">{{ reason }}</td><td class="num mono"><a href="/wholesale/messages/?customer={{ acc.pk }}&status=refused">{{ n|intcomma }}</a></td></tr>{% empty %}<tr><td colspan="2" class="muted small">None refused.</td></tr>{% endfor %}</tbody></table></div>
+<div class="tablewrap" style="margin-top:12px"><table><thead><tr><th>Failure code {% tip "failure_codes" %}</th><th class="num">Messages</th><th class="num">Share</th></tr></thead><tbody>
+{% for label, n, p in failures30 %}<tr><td class="mono">{{ label }}</td><td class="num mono">{{ n|intcomma }}</td><td class="num mono">{{ p }}%</td></tr>{% empty %}<tr><td colspan="3" class="muted small">No failures.</td></tr>{% endfor %}</tbody></table></div></section>
+</div>{% endif %}
 {% endif %}
 
 {% if vend %}
@@ -43,12 +56,15 @@
 <div class="grid2 panels">
 <form method="post" class="card stack">{% csrf_token %}<input type="hidden" name="action" value="vendor"><h2>Settings</h2>{% include "partials/form.html" with form=vendor_form %}<div><button class="btn primary">Save</button></div></form>
 <section class="card"><div class="panelhead"><h2>Binds to this vendor</h2><a class="btn sm" href="/accounts/{{ acc.pk }}/vendor-bind/new/">+ Add</a></div>
-<div class="tablewrap"><table><thead><tr><th>Bind</th><th>Host</th><th class="num">Max/s</th><th>Status</th><th class="num">Unmatched receipts</th><th></th></tr></thead><tbody>
+<div class="tablewrap"><table><thead><tr><th>Bind</th><th>Host</th><th class="num">Max/s</th><th>Status</th><th class="num">Unmatched receipts {% tip "unmatched" %}</th><th></th></tr></thead><tbody>
 {% for b in binds %}<tr><td>{{ b.title }}</td><td class="mono">{{ b.host }}:{{ b.port }}</td><td class="num mono">{{ b.tps }}</td>
 <td>{% if not b.enabled %}<span class="pill free">Disabled</span>{% elif b.bound %}<span class="pill ok">Bound</span>{% else %}<span class="pill bad" title="{{ b.last_error }}">Not bound</span>{% endif %}</td>
 <td class="num mono">{% if b.unmatched_dlrs %}<span class="pill warn" title="Receipts whose ID matched none of our messages. Usually a vendor ID format problem.">{{ b.unmatched_dlrs|intcomma }}</span>{% else %}0{% endif %}</td><td class="rowacts"><a href="/accounts/{{ acc.pk }}/vendor-bind/{{ b.pk }}/">Edit</a></td></tr>
-{% empty %}<tr><td colspan="6" class="empty">None yet.</td></tr>{% endfor %}</tbody></table></div></section>
+{% empty %}<tr><td colspan="6" class="empty"><div class="emptystate"><span>No connection to this vendor yet. They'll give you a host, port, system ID and password.</span><a class="btn primary sm" href="/accounts/{{ acc.pk }}/vendor-bind/new/">Add a bind</a></div></td></tr>{% endfor %}</tbody></table></div></section>
 </div>
+{% if vendor_failures30 %}<section class="card" style="margin-top:16px"><div class="panelhead"><h2>Top failure codes, 30 days {% tip "failure_codes" %}</h2></div>
+<div class="tablewrap"><table><thead><tr><th>Code</th><th class="num">Messages</th><th class="num">Share of failures</th></tr></thead><tbody>
+{% for label, n, p in vendor_failures30 %}<tr><td class="mono">{{ label }}</td><td class="num mono">{{ n|intcomma }}</td><td class="num mono">{{ p }}%</td></tr>{% endfor %}</tbody></table></div></section>{% endif %}
 {% include "wholesale/_rates.html" with rates=buy_rates side="buy" title="Buy rates (we pay them)" kind="buy-rate" %}
 {% endif %}
 {% endblock %}

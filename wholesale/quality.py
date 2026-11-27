@@ -47,6 +47,7 @@ def vendor_quality(days=7, vendor_ids=None):
         if delays:
             s = sorted(delays)
             row["p10"], row["p90"] = round(s[len(s) // 10], 1), round(s[(len(s) * 9) // 10], 1)
+        row["top_errors"] = top_failures(base.filter(vendor_id=v.account_id))
         row["flags"] = flags(row, delays)
         rows.append(row)
     rows.sort(key=lambda r: -r["sent"])
@@ -70,4 +71,34 @@ def flags(row, delays):
     if final >= 50 and (row["no_receipt_pct"] or 0) >= 20:
         out.append(f"{row['no_receipt_pct']}% of messages never got a receipt. Either the route loses messages or "
                    "its receipts don't reach us (check the bind and ID format).")
+    return out
+
+
+def top_failures(qs, n=3):
+    """The most common failure codes as the vendor reported them: [(label, count, %)]."""
+    failed = qs.filter(status__in=[M.UNDELIVERED, M.EXPIRED, M.REJECTED, M.UNKNOWN])
+    total = failed.count()
+    rows = failed.values("stat", "err").annotate(c=Count("pk")).order_by("-c")[:n]
+    return [((f"{r['stat']} {r['err']}".strip() or "No code"), r["c"], pct(r["c"], total)) for r in rows]
+
+
+def refusal_reasons(qs, n=5):
+    """Why we refused a customer's messages, most common first: [(reason, count)]."""
+    return [(r["reason"] or "No reason", r["c"]) for r in
+            qs.filter(status=M.REFUSED).values("reason").annotate(c=Count("pk")).order_by("-c")[:n]]
+
+
+def by_country(qs):
+    """Per destination: sent, delivered %, no-receipt %, charged, margin. Real traffic only."""
+    from django.db.models import Sum
+    rows = (qs.exclude(status=M.REFUSED).values("country__name").annotate(
+        sent=Count("pk"), delivered=Count("pk", filter=Q(status=M.DELIVERED)),
+        final=Count("pk", filter=Q(status__in=M.FINAL)), no_receipt=Count("pk", filter=Q(no_receipt=True)),
+        charged=Sum("charged"), cost=Sum("buy_rate", filter=Q(vendor__isnull=False))).order_by("-sent"))
+    out = []
+    for r in rows:
+        charged, cost = r["charged"] or 0, r["cost"] or 0
+        out.append({"country": r["country__name"] or "Unknown", "sent": r["sent"],
+                    "delivered_pct": pct(r["delivered"], r["final"]), "no_receipt_pct": pct(r["no_receipt"], r["final"]),
+                    "charged": charged, "margin": charged - cost})
     return out

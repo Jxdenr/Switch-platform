@@ -1,4 +1,4 @@
-{% extends "base.html" %}{% load switch humanize %}
+{% extends "base.html" %}{% load guide switch humanize %}
 {% block title %}{{ acc }}{% endblock %}
 {% block content %}
 <div class="crumbs"><a href="{{ acc.list_url }}">{{ acc.list_label }}</a> / {{ acc }}</div>
@@ -7,11 +7,12 @@
 {% if acc.is_client %}<a class="btn" href="/numbers/?client={{ acc.pk }}">Allocated numbers</a>{% endif %}
 <a class="btn" href="/sms/records/?{% if acc.is_client %}client{% else %}supplier{% endif %}={{ acc.pk }}">SMS records</a>
 <a class="btn primary" href="/accounts/{{ acc.pk }}/edit/">Edit account</a></div></div>
+{% page_help "account" %}
 <nav class="tabs">
   <a href="?tab=connections" class="{% if tab == 'connections' or tab == 'sms' %}on{% endif %}">SMS connections</a>
   {% if acc.is_supplier %}<a href="?tab=groups" class="{% if tab == 'groups' %}on{% endif %}">Billing groups</a>{% endif %}
   {% if acc.is_client %}<a href="?tab=numbers" class="{% if tab == 'numbers' %}on{% endif %}">Numbers</a>{% endif %}
-  <a href="/wholesale/accounts/{{ acc.pk }}/">Wholesale</a>
+  <a href="/wholesale/accounts/{{ acc.pk }}/">Outbound SMS</a>
   <a href="?tab=voice" class="{% if tab == 'voice' %}on{% endif %}">Voice</a>
   <a href="?tab=details" class="{% if tab == 'details' %}on{% endif %}">Contacts &amp; details</a>
   <a href="?tab=statement" class="{% if tab == 'statement' %}on{% endif %}">Statement</a>
@@ -20,11 +21,11 @@
 {% if tab == "groups" %}
 <div class="tablewrap"><table><thead><tr><th>Title</th><th>Country</th><th>Routing</th><th>Currency</th><th></th></tr></thead><tbody>
 {% for g in groups %}<tr><td><a href="/numbers/?group={{ g.pk }}">{{ g.title }}</a></td><td>{{ g.country }}</td><td>{{ g.get_routing_type_display }}</td><td>{{ g.currency }}</td><td class="rowacts"><a href="/billing-groups/{{ g.pk }}/edit/">Edit</a></td></tr>
-{% empty %}<tr><td colspan="5" class="empty">No billing groups for this supplier yet.</td></tr>{% endfor %}</tbody></table></div>
+{% empty %}<tr><td colspan="5" class="empty"><div class="emptystate"><span>No billing groups for this supplier yet.</span><a class="btn primary sm" href="/billing-groups/new/?supplier={{ acc.pk }}">Create a billing group</a></div></td></tr>{% endfor %}</tbody></table></div>
 {% elif tab == "numbers" %}
 <div class="tablewrap"><table><thead><tr><th>Number</th><th>Billing group</th><th>Country</th><th>Terms</th><th>Since</th></tr></thead><tbody>
 {% for a in allocations %}<tr><td class="mono">{{ a.number.number|e164 }}</td><td>{{ a.number.billing_group.title }}</td><td>{{ a.number.billing_group.country }}</td><td>{{ a.payment_terms|default:"" }}</td><td class="mono">{{ a.starts_at|date:"Y-m-d" }}</td></tr>
-{% empty %}<tr><td colspan="5" class="empty">No numbers allocated.</td></tr>{% endfor %}</tbody></table></div>
+{% empty %}<tr><td colspan="5" class="empty"><div class="emptystate"><span>No numbers allocated to this client yet.</span><a class="btn primary sm" href="/numbers/allocate/?client={{ acc.pk }}">Allocate numbers</a></div></td></tr>{% endfor %}</tbody></table></div>
 {% if allocations|length == 200 %}<p class="muted">Showing the first 200. <a href="/numbers/?client={{ acc.pk }}">See all</a>.</p>{% endif %}
 {% elif tab == "statement" %}
 {% include "crm/_statement_volumes.html" %}

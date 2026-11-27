@@ -373,3 +373,77 @@ class PageTests(TestCase):
         plan = RoutePlan.objects.get()
         self.client.post("/wholesale/routes/", {"form": "entry", "plan": plan.pk, "vendor": self.v2.pk, "priority": 1})
         self.assertEqual(plan.entries.count(), 1)
+
+
+class SettingsAddedTests(TestCase):
+    """Split-by-percentage routing, the daily cap, duplicate refusal and the delivery warning."""
+
+    def setUp(self):
+        world(self, balance="100")
+
+    def test_split_by_percentage_follows_shares_and_keeps_failover(self):
+        import random
+        plan = RoutePlan.objects.create(title="Split", mode=RoutePlan.SPLIT)
+        RouteEntry.objects.create(plan=plan, country=self.uk, vendor=self.v1, share=30)
+        RouteEntry.objects.create(plan=plan, country=self.uk, vendor=self.v2, share=70)
+        Customer.objects.filter(pk=self.cust.pk).update(route_plan=plan)
+        self.cust.refresh_from_db()
+        rng = random.Random(7)
+        firsts = [engine.candidates(self.cust, self.uk, self.ee, Decimal("0.03"), rng=rng)[0].vendor_id
+                  for _ in range(2000)]
+        share_v2 = firsts.count(self.v2.pk) / len(firsts)
+        self.assertAlmostEqual(share_v2, 0.70, delta=0.04)
+        # the vendor not picked first is still there as failover
+        self.assertEqual(len(engine.candidates(self.cust, self.uk, self.ee, Decimal("0.03"), rng=rng)), 2)
+
+    def test_daily_cap_refuses_after_limit(self):
+        Customer.objects.filter(pk=self.cust.pk).update(daily_limit=2)
+        self.assertEqual(engine.accept(self.cust_acc, fields(body="a")).status, engine.ROK)
+        self.assertEqual(engine.accept(self.cust_acc, fields(body="b")).status, engine.ROK)
+        r = engine.accept(self.cust_acc, fields(body="c"))
+        self.assertEqual(r.status, engine.RTHROTTLED)
+        self.assertIn("Daily cap", r.reason)
+
+    def test_duplicate_within_window_is_refused_and_not_charged(self):
+        Customer.objects.filter(pk=self.cust.pk).update(duplicate_minutes=10)
+        self.assertEqual(engine.accept(self.cust_acc, fields()).status, engine.ROK)
+        r = engine.accept(self.cust_acc, fields())
+        self.assertIn("Duplicate", r.reason)
+        self.assertEqual(r.message.charged, 0)
+        self.assertEqual(engine.accept(self.cust_acc, fields(dest="447700900124")).status, engine.ROK)
+
+    def test_overview_flags_low_delivery(self):
+        from django.contrib.auth.models import User
+        self.client.force_login(User.objects.create_superuser("boss", "b@example.com", "pw-long-enough"))
+        Customer.objects.filter(pk=self.cust.pk).update(delivery_alert_pct=90)
+        now = timezone.now()
+        for i in range(60):
+            M.objects.create(created_at=now, customer=self.cust_acc, source="x", destination="447700900000",
+                             country=self.uk, vendor=self.v1, status=M.DELIVERED if i < 40 else M.UNDELIVERED)
+        r = self.client.get("/wholesale/")
+        self.assertContains(r, "Delivery low")
+
+
+class HelpTests(TestCase):
+    """Every page carries its key; empty pages offer the next step; the setup checklist ticks itself."""
+
+    def setUp(self):
+        call_command("seed_lookups", verbosity=0)
+        from django.contrib.auth.models import User
+        self.client.force_login(User.objects.create_superuser("boss", "b@example.com", "pw-long-enough"))
+
+    def test_pages_have_help_and_empty_prompts(self):
+        for url in ["/", "/suppliers/", "/clients/", "/binds/", "/billing-groups/", "/numbers/", "/numbers/add/",
+                    "/sms/records/", "/sms/stats/", "/sms/blocking/", "/voice/cdrs/", "/wholesale/",
+                    "/wholesale/routes/", "/wholesale/quality/", "/wholesale/networks/"]:
+            r = self.client.get(url)
+            self.assertContains(r, 'class="pagehelp"', msg_prefix=url)
+        self.assertContains(self.client.get("/suppliers/"), "Add your first supplier")
+        self.assertContains(self.client.get("/wholesale/routes/"), "Create your first plan")
+        self.assertContains(self.client.get("/"), "Get set up")
+
+    def test_setup_checklist_ticks_off(self):
+        from core.help import setup_steps
+        self.assertFalse(setup_steps()[0]["steps"][0][1])
+        Account.objects.create(title="Sup", is_supplier=True)
+        self.assertTrue(setup_steps()[0]["steps"][0][1])

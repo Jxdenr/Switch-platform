@@ -1,8 +1,9 @@
-{% extends "base.html" %}{% load switch humanize %}
+{% extends "base.html" %}{% load guide switch humanize %}
 {% block title %}Blocking rules{% endblock %}
 {% block content %}
 <div class="pagehead"><div><h1>Blocking rules</h1>
 <div class="sub">Every SMS rule in one place. Blocked SMS are recorded but not forwarded or paid out. {{ blocked_30d|intcomma }} SMS blocked in the last 30 days.</div></div></div>
+{% page_help "blocking" %}
 
 <div class="dashgrid rules-grid">
 <section class="card"><div class="panelhead"><h2>Rules</h2></div>
@@ -12,14 +13,14 @@
 <td>{% if r.scope == "customer" %}<a href="/wholesale/accounts/{{ r.account_id }}/">{{ r.account }}</a> <span class="muted small">wholesale customer</span>{% elif r.scope == "group" %}<a href="/billing-groups/{{ r.billing_group_id }}/edit/">{{ r.billing_group }}</a> <span class="muted small">billing group</span>{% elif r.account %}<a href="/accounts/{{ r.account_id }}/">{{ r.account }}</a> <span class="muted small">{{ r.scope }}</span>{% else %}Everyone{% endif %}</td>
 <td class="num">{% if r.n_hits %}<a href="/sms/records/?status=blocked">{{ r.n_hits|intcomma }}</a>{% else %}<span class="muted">0</span>{% endif %}</td>
 <td><form method="post">{% csrf_token %}<button class="btn sm danger" name="delete" value="{{ r.pk }}">Remove</button></form></td></tr>
-{% empty %}<tr><td colspan="4" class="empty">No rules{% if scope %} here{% endif %}.</td></tr>{% endfor %}</tbody></table></div>
+{% empty %}{% empty_row 4 "blocking" %}{% endfor %}</tbody></table></div>
 </section>
 
 <form method="post" class="card stack" id="rule-form">{% csrf_token %}<h2>Add a rule</h2>
-<div class="field"><label>Applies to</label><div class="seg seg-radio" id="scope">{% for r in form.scope %}<label>{{ r.tag }}<span>{% if r.data.value == "all" %}Everyone{% elif r.data.value == "supplier" %}Supplier{% elif r.data.value == "client" %}Client{% elif r.data.value == "customer" %}Wholesale customer{% else %}Billing group{% endif %}</span></label>{% endfor %}</div></div>
+<div class="field"><label>Applies to</label><div class="seg seg-radio" id="scope">{% for r in form.scope %}<label>{{ r.tag }}<span>{% if r.data.value == "all" %}Everyone{% elif r.data.value == "supplier" %}Supplier{% elif r.data.value == "client" %}Client{% elif r.data.value == "customer" %}Outbound customer{% else %}Billing group{% endif %}</span></label>{% endfor %}</div></div>
 <div class="field" data-scope="supplier"><label for="id_supplier">Supplier</label>{{ form.supplier }}<span class="help">Everything this supplier sends us.</span>{% for e in form.supplier.errors %}<span class="err">{{ e }}</span>{% endfor %}</div>
 <div class="field" data-scope="client"><label for="id_client">Client</label>{{ form.client }}<span class="help">Everything going to this client (all their numbers).</span>{% for e in form.client.errors %}<span class="err">{{ e }}</span>{% endfor %}</div>
-<div class="field" data-scope="customer"><label for="id_customer">Wholesale customer</label>{{ form.customer }}<span class="help">Everything this customer sends us to route to vendors.</span>{% for e in form.customer.errors %}<span class="err">{{ e }}</span>{% endfor %}</div>
+<div class="field" data-scope="customer"><label for="id_customer">Outbound SMS customer</label>{{ form.customer }}<span class="help">Everything this customer sends us to route to vendors.</span>{% for e in form.customer.errors %}<span class="err">{{ e }}</span>{% endfor %}</div>
 <div class="field" data-scope="group"><label for="id_billing_group">Billing group</label>{{ form.billing_group }}<span class="help">Every number in this range, whichever client has it.</span>{% for e in form.billing_group.errors %}<span class="err">{{ e }}</span>{% endfor %}</div>
 <div class="field"><label for="id_rule_type">Rule</label>{{ form.rule_type }}</div>
 <div class="field"><label for="id_value" id="value-label">Value</label>{{ form.value }}<span class="help" id="value-help"></span>{% for e in form.value.errors %}<span class="err">{{ e }}</span>{% endfor %}</div>
