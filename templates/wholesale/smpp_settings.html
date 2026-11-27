@@ -1,0 +1,9 @@
+{% extends "base.html" %}
+{% block title %}{{ su }}{% endblock %}
+{% block content %}
+<div class="crumbs"><a href="/wholesale/accounts/{{ acc.pk }}/">{{ acc }}</a> / {{ su }}</div>
+<div class="pagehead"><h1>{{ su.title }} <span class="muted">({{ su.username }})</span></h1></div>
+<form class="card stack" method="post">{% csrf_token %}{% include "partials/form.html" %}
+<p class="muted small" style="margin:0">Test mode is for a customer building or checking their integration. Nothing is sent to any network. Each receipt is simulated using the % delivered above and carries err:TST, and the messages are marked as test in records and exports. Give a customer a separate test bind and tell them it is a sandbox. Never use it on live traffic.</p>
+<div><button class="btn primary">Save</button> <a class="btn" href="/wholesale/accounts/{{ acc.pk }}/">Cancel</a></div></form>
+{% endblock %}

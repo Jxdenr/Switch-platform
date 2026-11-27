@@ -1,0 +1,20 @@
+{% extends "base.html" %}
+{% block title %}Route plans{% endblock %}
+{% block content %}
+<div class="pagehead"><div><h1>Route plans</h1><div class="sub">Which vendors carry each customer's traffic. A customer without a plan uses every vendor with a rate, cheapest first.</div></div></div>
+<p class="muted" style="margin-top:0">A vendor is only used if it costs less than the customer's rate (unless the customer allows routing at a loss). If a vendor refuses a message, the next one in the plan is tried.</p>
+{% for p in plans %}
+<section class="card" style="margin-bottom:16px"><div class="panelhead"><h2>{{ p.title }}</h2><span class="muted small">{{ p.get_mode_display }}{% if p.min_delivery_pct %} · skips vendors under {{ p.min_delivery_pct }}% delivered{% endif %} · {{ p.n_customers }} customer{{ p.n_customers|pluralize }}</span></div>
+{% if p.notes %}<p class="muted small" style="margin-top:0">{{ p.notes }}</p>{% endif %}
+<div class="tablewrap"><table><thead><tr><th>Country</th><th>Network</th><th>Vendor</th><th class="num">Priority</th><th></th></tr></thead><tbody>
+{% for e in p.entries.all %}<tr><td>{{ e.country|default:"All countries" }}</td><td>{{ e.network|default:"All" }}</td><td><a href="/wholesale/accounts/{{ e.vendor_id }}/">{{ e.vendor }}</a></td><td class="num mono">{{ e.priority }}</td>
+<td><form method="post">{% csrf_token %}<button class="btn sm danger" name="delete_entry" value="{{ e.pk }}">Remove</button></form></td></tr>
+{% empty %}<tr><td colspan="5" class="empty">No vendors in this plan yet, so it routes nothing.</td></tr>{% endfor %}</tbody></table></div>
+<form method="post" class="filters" style="margin-top:10px">{% csrf_token %}<input type="hidden" name="form" value="entry"><input type="hidden" name="plan" value="{{ p.pk }}">
+<label>Country{{ entry_form.country }}</label><label>Network{{ entry_form.network }}</label><label>Vendor{{ entry_form.vendor }}</label><label>Priority{{ entry_form.priority }}</label><button class="btn">+ Add vendor</button></form>
+</section>
+{% endfor %}
+<form method="post" class="card stack">{% csrf_token %}<input type="hidden" name="form" value="plan"><h2>New route plan</h2>
+{% include "partials/form.html" with form=plan_form %}
+<div><button class="btn primary">Add plan</button></div></form>
+{% endblock %}

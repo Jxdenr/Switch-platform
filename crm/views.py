@@ -13,6 +13,7 @@ from django.views.decorators.http import require_POST
 from core.access import client_account, staff_required
 from core.models import log
 from sms.views import _date_range
+from wholesale.models import ApiKey as WKey, BuyRate, SellRate, VendorBind as VBind
 from . import models as m
 from . import statements as st
 
@@ -37,6 +38,14 @@ PANELS = {
                       "transceiver", "routing_attrs", "enforce_dlr", "enabled"], "SMSC (we bind to supplier)", "sms"),
     "http-endpoint": (m.HttpEndpoint, ["title", "url", "method", "to_param", "from_param", "message_param",
                                        "uuid_param", "enabled"], "HTTP endpoint (we push SMS to client)", "sms"),
+    "wholesale-key": (WKey, ["title", "key", "ip", "dlr_url", "tps", "test_mode", "test_delivered_pct",
+                             "test_price", "enabled"], "Wholesale HTTP key (customer sends traffic over HTTP)",
+                      "wholesale"),
+    "vendor-bind": (VBind, ["title", "host", "port", "username", "password", "system_type", "bind_mode", "tps",
+                            "window", "src_ton", "src_npi", "enabled"], "Vendor bind (we bind to the vendor)",
+                    "wholesale"),
+    "sell-rate": (SellRate, ["country", "network", "rate"], "Sell rate (customer pays us)", "wholesale"),
+    "buy-rate": (BuyRate, ["country", "network", "rate"], "Buy rate (we pay the vendor)", "wholesale"),
     "prefix": (m.Prefix, ["prefix"], "Supplier prefix", "sms"),
     "notification": (m.Notification, ["url"], "Notification URL", "sms"),
     "origination-ip": (m.OriginationIp, ["title", "ip", "ip_type"], "Origination IP", "voice"),
@@ -101,6 +110,8 @@ def account_edit(request, pk=None):
 def account_detail(request, pk):
     acc = get_object_or_404(m.Account, pk=pk)
     tab = request.GET.get("tab", "connections")
+    if tab == "wholesale":
+        return redirect("ws_account", acc.pk)
     panels = []
     for kind, (model, fields, label, group) in PANELS.items():
         rows = model.objects.filter(account=acc)

@@ -40,4 +40,5 @@ class Command(BaseCommand):
                 continue
             forward(m)
             done += 1
-        return done
+        from wholesale.engine import push_http_dlrs
+        return done + push_http_dlrs()

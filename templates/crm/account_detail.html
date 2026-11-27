@@ -11,6 +11,7 @@
   <a href="?tab=connections" class="{% if tab == 'connections' or tab == 'sms' %}on{% endif %}">SMS connections</a>
   {% if acc.is_supplier %}<a href="?tab=groups" class="{% if tab == 'groups' %}on{% endif %}">Billing groups</a>{% endif %}
   {% if acc.is_client %}<a href="?tab=numbers" class="{% if tab == 'numbers' %}on{% endif %}">Numbers</a>{% endif %}
+  <a href="/wholesale/accounts/{{ acc.pk }}/">Wholesale</a>
   <a href="?tab=voice" class="{% if tab == 'voice' %}on{% endif %}">Voice</a>
   <a href="?tab=details" class="{% if tab == 'details' %}on{% endif %}">Contacts &amp; details</a>
   <a href="?tab=statement" class="{% if tab == 'statement' %}on{% endif %}">Statement</a>

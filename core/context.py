@@ -43,6 +43,11 @@ NAV = [
              ("ticker", "Live ticker", "/sms/ticker/", "live", False),
              ("stats", "SMS stats", "/sms/stats/", "stat", True),
              ("blocking", "Blocking rules", "/sms/blocking/", "block", True)]),
+    ("Wholesale", [("ws_overview", "Overview", "/wholesale/", "home", True),
+                   ("ws_messages", "Messages", "/wholesale/messages/", "msg", True),
+                   ("ws_quality", "Vendor quality", "/wholesale/quality/", "stat", True),
+                   ("ws_routes", "Route plans", "/wholesale/routes/", "grp", True),
+                   ("ws_networks", "Networks", "/wholesale/networks/", "num", True)]),
     ("Voice", [("cdrs", "Call records", "/voice/cdrs/", "phone", False),
                ("voicestats", "Voice stats", "/voice/stats/", "stat", True)]),
     ("Admin", [("admin", "Users & settings", "/admin/", "set", True)]),
@@ -66,6 +71,8 @@ def nav(request):
     binds_down = 0
     if user and user.is_authenticated and not is_client:
         from crm.models import SmppUser, Smsc
+        from wholesale.models import VendorBind
         binds_down = (SmppUser.objects.filter(enabled=True, bound=False).count()
-                      + Smsc.objects.filter(enabled=True, bound=False).count())
+                      + Smsc.objects.filter(enabled=True, bound=False).count()
+                      + VendorBind.objects.filter(enabled=True, bound=False).count())
     return {"nav_groups": groups, "binds_down": binds_down, "is_client_user": is_client}

@@ -1,0 +1,12 @@
+{% extends "base.html" %}
+{% block title %}Networks{% endblock %}
+{% block content %}
+<div class="pagehead"><div><h1>Networks</h1><div class="sub">Number prefixes to mobile networks (MCC/MNC), used to price and route by network. Without a match, the country is used.</div></div></div>
+<form method="post" enctype="multipart/form-data" class="card stack" style="margin-bottom:16px">{% csrf_token %}<h2>Import prefixes</h2>
+<p class="muted" style="margin:0">CSV with columns <span class="mono">country, network, mcc, mnc, prefix</span>. Several prefixes in one row can be separated by spaces. Existing prefixes are moved to the network in the file.</p>
+<p class="muted small" style="margin:0">Prefixes give the network a number was first issued to. Where numbers can be ported (UK and most of Europe) some will have moved network; an HLR/number portability lookup is needed for those to be exact.</p>
+<div><input type="file" name="csv" accept=".csv,text/csv" required> <button class="btn primary">Import</button></div></form>
+<div class="tablewrap"><table><thead><tr><th>Country</th><th>Network</th><th>MCC</th><th>MNC</th><th class="num">Prefixes</th></tr></thead><tbody>
+{% for n in networks %}<tr><td>{{ n.country }}</td><td>{{ n.name }}</td><td class="mono">{{ n.mcc }}</td><td class="mono">{{ n.mnc }}</td><td class="num mono">{{ n.n_prefixes }}</td></tr>
+{% empty %}<tr><td colspan="5" class="empty">No networks yet. Rates and routes work per country until you import some.</td></tr>{% endfor %}</tbody></table></div>
+{% endblock %}

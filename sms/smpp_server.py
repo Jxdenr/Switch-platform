@@ -8,6 +8,10 @@
 Binds where WE connect out to a supplier's SMSC still go through Jasmin (see sync_jasmin).
 Run with `manage.py smpp_server`. Bind status shown in the app is kept up to date from here.
 
+* Wholesale customers bind (any mode) and send traffic to be routed to vendors. Their submit_sm
+  is answered with our message ID; the vendor's real receipt comes back to them as deliver_sm
+  (see wholesale/). Each bind has a messages-per-second limit; over it they get ESME_RTHROTTLED.
+
 Known limits (v1): long messages split in parts (UDH) are stored one record per part, and we
 do not send delivery receipts back to suppliers yet.
 """
@@ -29,6 +33,7 @@ SUBMIT_SM, DELIVER_SM, UNBIND, ENQUIRE_LINK, GENERIC_NACK = 0x04, 0x05, 0x06, 0x
 RESP = 0x80000000
 ROK, RINVCMDID, RALYBND, RINVBNDSTS, RSYSERR, RBINDFAIL, RINVPASWD, RINVSYSID, RSUBMITFAIL = (
     0x00, 0x03, 0x05, 0x04, 0x08, 0x0D, 0x0E, 0x0F, 0x45)
+RTHROTTLED = 0x58
 GSM_SAFE = set(string.ascii_letters + string.digits + " \r\n!\"#%&'()*+,-./:;<=>?")
 DELIVERY_TIMEOUT = 30  # seconds to wait for deliver_sm_resp
 
@@ -139,6 +144,43 @@ def store_submit(username, fields):
 
 
 @sync_to_async
+def wholesale_submit(user_id, body):
+    """Returns (command_status, our message id or "")."""
+    from crm.models import SmppUser
+    from wholesale import engine, pdu as wpdu
+    u = SmppUser.objects.select_related("account", "wholesale").get(pk=user_id)
+    try:
+        fields = wpdu.parse_submit_raw(body)
+    except (ValueError, IndexError):
+        return RSYSERR, ""
+    res = engine.accept(u.account, fields, smpp_user=u)
+    if res.status == ROK and res.message.test:
+        engine.simulate_test(res.message)
+    return res.status, (res.message.message_id if res.status == ROK else "")
+
+
+@sync_to_async
+def wholesale_settings(user_id):
+    from wholesale.models import SmppTestSettings
+    return SmppTestSettings.objects.get_or_create(smpp_user_id=user_id)[0].tps
+
+
+@sync_to_async
+@_retry
+def wholesale_dlrs(account_id):
+    from wholesale import engine, pdu as wpdu
+    return [(m.pk, wpdu.build_receipt(m.source, m.destination, m.message_id, m.stat, m.err, m.created_at,
+                                      m.done_at, m.body)) for m in engine.due_dlrs(account_id)]
+
+
+@sync_to_async
+@_retry
+def wholesale_dlr_result(msg_pk, ok, error=""):
+    from wholesale import engine
+    engine.dlr_result(msg_pk, ok, error)
+
+
+@sync_to_async
 @_retry
 def due_for(user_id, exclude):
     from .models import Message
@@ -174,6 +216,8 @@ class Session:
         self.server, self.reader, self.writer = server, reader, writer
         self.user, self.mode, self.seq = None, None, 0
         self.inflight = {}  # seq -> (message id, sent at)
+        self.dlr_inflight = {}  # seq -> (wholesale message pk, sent at)
+        self.tps = 0
         self.ip = (writer.get_extra_info("peername") or ("?",))[0]
 
     def next_seq(self):
@@ -214,6 +258,10 @@ class Session:
         if cmd == UNBIND:
             await self.send(pdu(UNBIND | RESP, ROK, seq))
             return False
+        if cmd == DELIVER_SM | RESP and seq in self.dlr_inflight:
+            mid, _ = self.dlr_inflight.pop(seq)
+            await wholesale_dlr_result(mid, status == ROK, "" if status == ROK else f"SMPP error 0x{status:02X}")
+            return True
         if cmd == DELIVER_SM | RESP:
             msg = self.inflight.pop(seq, None)
             if msg:
@@ -247,13 +295,39 @@ class Session:
             await self.send(pdu(cmd | RESP, err, seq))
             return False
         self.user, self.mode = user, cmd
+        if user.role == user.WHOLESALE:
+            self.tps = await wholesale_settings(user.pk)
         self.server.sessions.add(self)
         await set_bound(user.pk, True)
         logger.info("%s bound as %s from %s", user.username, user.role, self.ip)
         await self.send(pdu(cmd | RESP, ROK, seq, b"switch\0"))
         return True
 
+    def throttled(self):
+        """Token bucket per SMPP user, shared by all of that user's sessions."""
+        if not self.tps:
+            return False
+        now = asyncio.get_running_loop().time()
+        tokens, last = self.server.buckets.get(self.user.pk, (float(self.tps), now))
+        tokens = min(float(self.tps), tokens + (now - last) * self.tps)
+        if tokens < 1:
+            self.server.buckets[self.user.pk] = (tokens, now)
+            return True
+        self.server.buckets[self.user.pk] = (tokens - 1, now)
+        return False
+
     async def submit(self, seq, body):
+        if self.user.role == self.user.WHOLESALE and self.mode != BIND_RX:
+            if self.throttled():
+                await self.send(pdu(SUBMIT_SM | RESP, RTHROTTLED, seq, b"\0"))
+                return True
+            try:
+                status, msg_id = await wholesale_submit(self.user.pk, body)
+            except Exception:
+                logger.exception("wholesale submit_sm from %s failed", self.user.username)
+                status, msg_id = RSYSERR, ""
+            await self.send(pdu(SUBMIT_SM | RESP, status, seq, msg_id.encode() + b"\0"))
+            return True
         if self.user.role != self.user.SUPPLIER or self.mode == BIND_RX:
             await self.send(pdu(SUBMIT_SM | RESP, RSUBMITFAIL, seq, b"\0"))
             return True
@@ -272,6 +346,16 @@ class Session:
             if now - sent > DELIVERY_TIMEOUT:
                 self.inflight.pop(s)
                 await delivery_result(mid, False, "No deliver_sm_resp from client")
+        for s, (mid, sent) in list(self.dlr_inflight.items()):
+            if now - sent > DELIVERY_TIMEOUT:
+                self.dlr_inflight.pop(s)
+                await wholesale_dlr_result(mid, False, "No deliver_sm_resp from customer")
+        if self.user and self.user.role == self.user.WHOLESALE and self.can_receive:
+            for mid, body in await wholesale_dlrs(self.user.account_id):
+                seq = self.next_seq()
+                self.dlr_inflight[seq] = (mid, now)
+                await self.send(pdu(DELIVER_SM, ROK, seq, body))
+            return
         if not (self.user and self.user.role == self.user.CLIENT and self.can_receive):
             return
         for mid, src, dst, text in await due_for(self.user.pk, [m for m, _ in self.inflight.values()]):
@@ -284,6 +368,9 @@ class Session:
         for mid, _ in self.inflight.values():
             await delivery_result(mid, False, "Client disconnected before confirming")
         self.inflight.clear()
+        for mid, _ in self.dlr_inflight.values():
+            await wholesale_dlr_result(mid, False, "Customer disconnected before confirming")
+        self.dlr_inflight.clear()
         if self.user and not any(s.user and s.user.pk == self.user.pk for s in self.server.sessions):
             await set_bound(self.user.pk, False)
         try:
@@ -296,6 +383,7 @@ class SmppServer:
     def __init__(self, host="0.0.0.0", port=2775, poll=1.0):
         self.host, self.port, self.poll = host, port, poll
         self.sessions = set()
+        self.buckets = {}
         self.server = None
 
     async def start(self):
