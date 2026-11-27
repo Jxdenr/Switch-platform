@@ -1,8 +1,9 @@
-{% extends "base.html" %}{% load switch humanize %}
+{% extends "base.html" %}{% load guide switch humanize %}
 {% block title %}SMS records{% endblock %}
 {% block content %}
 <div class="pagehead"><div><h1>SMS records</h1><div class="sub">{{ date_range }}</div></div>
 <div class="actions"><a class="btn" href="/sms/ticker/">Live ticker</a><a class="btn primary" href="?{% qs_without 'page' %}&export=csv">Export CSV</a></div></div>
+{% page_help "records" %}
 <div class="kpis"><div class="kpi"><b>Messages</b><span>{{ totals.n|intcomma }}</span></div>
 {% if not is_client %}<div class="kpi"><b>Due in</b><span>{{ totals.due_in|money }}</span></div>{% endif %}
 <div class="kpi"><b>{% if is_client %}Earned{% else %}Due out{% endif %}</b><span>{{ totals.due_out|money }}</span></div>
@@ -30,7 +31,7 @@
   {% else %}<td>{{ m|attr:k }}</td>{% endif %}
 {% endif %}{% endfor %}
 {% if not is_client %}<td>{% if m.status == "failed" and m.http_endpoint_id %}<form method="post" action="/sms/{{ m.pk }}/resend/">{% csrf_token %}<input type="hidden" name="back" value="{{ request.get_full_path }}"><button class="btn sm">Resend</button></form>{% endif %}</td>{% endif %}</tr>
-{% empty %}<tr><td colspan="16" class="empty">No messages in this range.</td></tr>{% endfor %}
+{% empty %}{% empty_row 16 "records" %}{% endfor %}
 </tbody></table></div>
 {% include "partials/pager.html" %}
 {% endblock %}

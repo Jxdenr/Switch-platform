@@ -1,8 +1,9 @@
-{% extends "base.html" %}{% load switch humanize %}
+{% extends "base.html" %}{% load guide switch humanize %}
 {% block title %}Numbers{% endblock %}
 {% block content %}
 <div class="pagehead"><div><h1>Numbers</h1><div class="sub">{{ page.paginator.count|intcomma }} match these filters</div></div>
 <div class="actions"><a class="btn" href="?{% qs_without 'page' %}&export=csv">Export {{ page.paginator.count|intcomma }} to CSV</a>{% if not is_client %}<a class="btn" href="/numbers/allocate/{% if f.group or f.country %}?group={{ f.group|default:'' }}&amp;country={{ f.country|default:'' }}{% endif %}">Allocate a quantity</a><a class="btn primary" href="/numbers/add/{% if f.group %}?group={{ f.group }}{% endif %}">+ Add numbers</a>{% endif %}</div></div>
+{% page_help "numbers" %}
 {% if since %}<div class="flash">Showing the {{ page.paginator.count|intcomma }} numbers allocated to {{ since_client }} since {{ since|date:"d M H:i" }}. <a href="?{% qs_without 'page' %}&export=csv"><b>Download them as CSV</b></a> · <a href="/numbers/?client={{ f.client }}">All of {{ since_client }}'s numbers</a></div>{% endif %}
 {% if not is_client %}<div class="kpis"><div class="kpi"><b>Total</b><span>{{ stats.total|intcomma }}</span></div><div class="kpi"><b>Allocated</b><span>{{ stats.allocated|intcomma }}</span></div><div class="kpi"><b>Free</b><span>{{ stats.free|intcomma }}</span></div><div class="kpi"><b>Blocked</b><span>{{ stats.blocked|intcomma }}</span></div></div>{% endif %}
 <form class="filters" method="get">
@@ -37,7 +38,7 @@
 <td>{% if n.blocked %}<span class="pill bad">Blocked</span>{% elif allocs %}<span class="pill ok">Allocated</span>{% else %}<span class="pill free">Free</span>{% endif %}</td>
 <td>{% for a in allocs|alloc_summary %}{% if not is_client %}<a href="/accounts/{{ a.client.pk }}/">{{ a.client }}</a>{% else %}{{ a.client }}{% endif %} <span class="muted">· {{ a.label }}</span>{% if not forloop.last %}<br>{% endif %}{% empty %}<span class="muted">—</span>{% endfor %}</td>
 <td>{{ allocs.0.payment_terms|default:"" }}</td><td>{{ allocs.0.starts_at|date:"Y-m-d"|default:"" }}</td></tr>
-{% empty %}<tr><td colspan="10" class="empty">No numbers match. {% if not is_client %}<a href="/numbers/add/">Add numbers</a> to a billing group.{% endif %}</td></tr>{% endfor %}
+{% empty %}{% empty_row 10 "numbers" %}{% endfor %}
 </tbody></table></div></form>
 {% include "partials/pager.html" %}
 {% endblock %}

@@ -1,14 +1,16 @@
-{% extends "base.html" %}{% load humanize %}
+{% extends "base.html" %}{% load guide humanize %}
 {% block title %}Vendor quality{% endblock %}
 {% block content %}
 <div class="pagehead"><div><h1>Vendor quality</h1><div class="sub">Last {{ days }} day{{ days|pluralize }}, from real receipts only (test binds excluded)</div></div>
 <div class="actions"><div class="seg"><a href="?days=1" class="{% if days == 1 %}on{% endif %}">24h</a><a href="?days=7" class="{% if days == 7 %}on{% endif %}">7 days</a><a href="?days=30" class="{% if days == 30 %}on{% endif %}">30 days</a></div></div></div>
-<p class="muted" style="margin-top:0">Warnings flag receipts that look generated or a route that loses messages. They are a reason to live-test the route with real handsets (for example through a number-testing service), not proof on their own.</p>
-<div class="tablewrap"><table><thead><tr><th>Vendor</th><th>Claims</th><th class="num">Sent</th><th class="num">Delivered</th><th class="num">Failed</th><th class="num">No receipt</th><th class="num">Waiting</th><th class="num">Receipt delay</th><th>Warnings</th></tr></thead><tbody>
+{% page_help "ws_quality" %}
+<div class="tablewrap"><table><thead><tr><th>Vendor</th><th>Claims</th><th class="num">Sent</th><th class="num">Delivered {% tip "delivered_pct" %}</th><th class="num">Failed</th><th class="num">No receipt {% tip "no_receipt" %}</th><th class="num">Waiting {% tip "waiting" %}</th><th class="num">Receipt delay {% tip "receipt_delay" %}</th><th>Top failure codes {% tip "failure_codes" %}</th><th>Warnings {% tip "warnings" %}</th></tr></thead><tbody>
 {% for r in rows %}<tr><td><a href="/wholesale/accounts/{{ r.vendor.account_id }}/">{{ r.vendor.account }}</a></td><td>{{ r.vendor.route_type|default:"—" }}</td>
 <td class="num mono">{{ r.sent|intcomma }}</td><td class="num mono">{% if r.delivered_pct is not None %}{{ r.delivered_pct }}%{% else %}—{% endif %}</td><td class="num mono">{{ r.failed|intcomma }}</td>
 <td class="num mono">{% if r.no_receipt_pct is not None %}{{ r.no_receipt_pct }}%{% else %}—{% endif %}</td><td class="num mono">{{ r.waiting|intcomma }}</td>
 <td class="num mono">{% if r.median_delay is not None %}{{ r.median_delay }}s{% if r.p10 is not None %} <span class="muted small">({{ r.p10 }}–{{ r.p90 }}s)</span>{% endif %}{% else %}—{% endif %}</td>
-<td style="white-space:normal;min-width:340px">{% for f in r.flags %}<div class="small"><span class="pill warn">Check</span> {{ f }}</div>{% empty %}<span class="muted">None</span>{% endfor %}</td></tr>
-{% empty %}<tr><td colspan="9" class="empty">No vendor traffic in this period.</td></tr>{% endfor %}</tbody></table></div>
+<td class="small">{% for label, n, p in r.top_errors %}<div><span class="mono">{{ label }}</span> <span class="muted">{{ p }}%</span></div>{% empty %}<span class="muted">—</span>{% endfor %}</td>
+<td>{% if r.flags %}<span class="pill warn">{{ r.flags|length }} to check</span>{% else %}<span class="muted">None</span>{% endif %}</td></tr>
+{% if r.flags %}<tr class="subrow"><td colspan="10"><ul class="flaglist">{% for f in r.flags %}<li>{{ f }}</li>{% endfor %}</ul></td></tr>{% endif %}
+{% empty %}{% empty_row 10 "ws_quality" %}{% endfor %}</tbody></table></div>
 {% endblock %}

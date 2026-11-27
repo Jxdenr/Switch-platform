@@ -1,27 +1,30 @@
-{% extends "base.html" %}{% load switch humanize %}
-{% block title %}Wholesale{% endblock %}
+{% extends "base.html" %}{% load guide switch humanize %}
+{% block title %}Outbound SMS{% endblock %}
 {% block content %}
-<div class="pagehead"><div><h1>Wholesale</h1>
-<div class="sub">Customers send us traffic, we route it to vendors and pass back the vendors' real receipts. Last 24 hours, {{ currency }}, test binds excluded.</div></div>
+<div class="pagehead"><div><h1>Outbound SMS</h1>
+<div class="sub">Last 24 hours · {{ currency }} · live traffic only</div></div>
 <div class="actions"><a class="btn" href="/wholesale/messages/">Messages</a><a class="btn" href="/wholesale/quality/">Vendor quality</a></div></div>
+{% page_help "ws_overview" %}
 <div class="statrow">
-<div class="stat accent"><b>Messages, 24h</b><span class="v">{{ t.n|intcomma }}</span><small>{{ t.refused|intcomma }} refused by us · {{ queued|intcomma }} queued · {{ waiting|intcomma }} waiting for a receipt</small></div>
-<div class="stat"><b>Delivered</b><span class="v">{% if t.delivered_pct is not None %}{{ t.delivered_pct }}%{% else %}—{% endif %}</span><small>Real receipts only, of messages with a final status</small></div>
-<div class="stat"><b>Charged <i class="cur">{{ currency }}</i></b><span class="v">{{ t.revenue|money }}</span><small>Vendor cost {{ t.cost|money }} · margin <strong>{{ t.margin|money }}</strong></small></div>
+<div class="stat accent"><b>Messages, 24h</b><span class="v">{{ t.n|intcomma }}</span><small>{{ t.refused|intcomma }} refused{% tip "refused" %} · {{ queued|intcomma }} queued · {{ waiting|intcomma }} waiting for a receipt</small></div>
+<div class="stat"><b>Delivered {% tip "delivered_pct" %}</b><span class="v">{% if t.delivered_pct is not None %}{{ t.delivered_pct }}%{% else %}—{% endif %}</span><small>Real receipts only, of messages with a final result</small></div>
+<div class="stat"><b>Charged <i class="cur">{{ currency }}</i></b><span class="v">{{ t.revenue|money }}</span><small>Vendor cost {{ t.cost|money }} · margin{% tip "margin" %} <strong>{{ t.margin|money }}</strong></small></div>
+<div class="stat"><b>Peak {% tip "peak" %}</b><span class="v">{{ peak_min|intcomma }}<small class="unit"> /min</small></span><small>{% if peak_at %}About {{ peak_sec }} a second, at {{ peak_at|date:"H:i" }}{% else %}No traffic yet{% endif %}</small></div>
 <div class="stat"><b>Receipts to send</b><span class="v{% if dlr_backlog > 100 %} warn{% endif %}">{{ dlr_backlog|intcomma }}</span><small>Waiting for a customer's receiver bind or callback</small></div>
 </div>
-<section class="card" style="margin-top:16px"><div class="panelhead"><h2>Wholesale customers</h2><a class="btn sm" href="/accounts/">+ From an account</a></div>
-<p class="muted small" style="margin-top:0">Open any account and choose the Wholesale tab to turn it into a wholesale customer or vendor.</p>
-<div class="tablewrap"><table><thead><tr><th>Customer</th><th>Route plan</th><th>Charged</th><th class="num">Balance</th><th class="num">Credit limit</th><th class="num">24h</th><th>Status</th></tr></thead><tbody>
+<section class="card" style="margin-top:16px"><div class="panelhead"><h2>Customers</h2><a class="btn sm" href="/clients/">+ From an account</a></div>
+<div class="tablewrap"><table><thead><tr><th>Customer</th><th>Route plan {% tip "route_plan" %}</th><th>Charged {% tip "charge_on" %}</th><th class="num">Balance {% tip "balance" %}</th><th class="num">Credit limit {% tip "credit_limit" %}</th><th class="num">24h</th><th class="num">Delivered {% tip "delivered_pct" %}</th><th>Status</th></tr></thead><tbody>
 {% for c in customers %}<tr><td><a href="/wholesale/accounts/{{ c.account_id }}/">{{ c.account }}</a></td><td>{{ c.route_plan|default:"Least cost, all vendors" }}</td><td>{% if c.charge_on == "delivered" %}On delivery{% else %}On vendor accept{% endif %}</td>
 <td class="num mono{% if c.available <= 0 %} bad{% endif %}">{{ c.balance|money }}</td><td class="num mono">{% if c.credit_limit %}{{ c.credit_limit|money }}{% else %}<span class="muted">Prepaid</span>{% endif %}</td><td class="num mono">{{ c.n_today|intcomma }}</td>
-<td>{% if not c.enabled %}<span class="pill free">Off</span>{% elif c.available <= 0 %}<span class="pill bad">Out of credit</span>{% elif c.low_balance_alert and c.balance < c.low_balance_alert %}<span class="pill warn">Low balance</span>{% else %}<span class="pill ok">Sending</span>{% endif %}</td></tr>
-{% empty %}<tr><td colspan="7" class="empty">No wholesale customers yet.</td></tr>{% endfor %}</tbody></table></div></section>
-<section class="card" style="margin-top:16px"><div class="panelhead"><h2>Vendors</h2></div>
-<div class="tablewrap"><table><thead><tr><th>Vendor</th><th>Claims</th><th>Binds up</th><th class="num">Sent, 24h</th><th class="num">Delivered</th><th>Warnings</th></tr></thead><tbody>
+<td class="num mono">{% if c.delivered_pct is not None %}{{ c.delivered_pct }}%{% else %}—{% endif %}</td>
+<td>{% if not c.enabled %}<span class="pill free">Off</span>{% elif c.available <= 0 %}<span class="pill bad">Out of credit</span>{% elif c.delivery_low %}<span class="pill warn" title="Under the {{ c.delivery_alert_pct }}% you set">Delivery low</span>{% elif c.low_balance_alert and c.balance < c.low_balance_alert %}<span class="pill warn">Low balance</span>{% else %}<span class="pill ok">Sending</span>{% endif %}</td></tr>
+{% empty %}{% empty_row 8 "ws_customers" %}{% endfor %}</tbody></table></div></section>
+<section class="card" style="margin-top:16px"><div class="panelhead"><h2>Vendors</h2><a class="btn sm" href="/suppliers/">+ From an account</a></div>
+<div class="tablewrap"><table><thead><tr><th>Vendor</th><th>Claims</th><th>Binds up {% tip "bind" %}</th><th class="num">Sent, 24h</th><th class="num">Delivered {% tip "delivered_pct" %}</th><th class="num">No receipt {% tip "no_receipt" %}</th><th>Warnings {% tip "warnings" %}</th></tr></thead><tbody>
 {% for v in vendors %}<tr><td><a href="/wholesale/accounts/{{ v.account_id }}/">{{ v.account }}</a></td><td>{{ v.route_type|default:"—" }}</td>
 <td>{% if not v.n_binds %}<span class="pill bad">No bind</span>{% elif v.n_up == v.n_binds %}<span class="pill ok">{{ v.n_up }}/{{ v.n_binds }}</span>{% else %}<span class="pill bad">{{ v.n_up }}/{{ v.n_binds }}</span>{% endif %}</td>
 <td class="num mono">{{ v.q.sent|default:0|intcomma }}</td><td class="num mono">{% if v.q.delivered_pct is not None %}{{ v.q.delivered_pct }}%{% else %}—{% endif %}</td>
+<td class="num mono">{% if v.q.no_receipt_pct is not None %}{{ v.q.no_receipt_pct }}%{% else %}—{% endif %}</td>
 <td>{% if v.q.flags %}<a class="pill warn" href="/wholesale/quality/?days=1">{{ v.q.flags|length }} to check</a>{% else %}<span class="muted">None</span>{% endif %}</td></tr>
-{% empty %}<tr><td colspan="6" class="empty">No vendors yet.</td></tr>{% endfor %}</tbody></table></div></section>
+{% empty %}{% empty_row 7 "ws_vendors" %}{% endfor %}</tbody></table></div></section>
 {% endblock %}

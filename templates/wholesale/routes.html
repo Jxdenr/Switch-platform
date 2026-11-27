@@ -1,20 +1,23 @@
-{% extends "base.html" %}
+{% extends "base.html" %}{% load guide %}
 {% block title %}Route plans{% endblock %}
 {% block content %}
-<div class="pagehead"><div><h1>Route plans</h1><div class="sub">Which vendors carry each customer's traffic. A customer without a plan uses every vendor with a rate, cheapest first.</div></div></div>
-<p class="muted" style="margin-top:0">A vendor is only used if it costs less than the customer's rate (unless the customer allows routing at a loss). If a vendor refuses a message, the next one in the plan is tried.</p>
+<div class="pagehead"><div><h1>Route plans</h1><div class="sub">{{ plans|length }} plan{{ plans|length|pluralize }} · a customer without a plan uses every vendor with a rate, cheapest first</div></div>
+<div class="actions"><a class="btn primary" href="#new-plan">+ New plan</a></div></div>
+{% page_help "ws_routes" %}
 {% for p in plans %}
-<section class="card" style="margin-bottom:16px"><div class="panelhead"><h2>{{ p.title }}</h2><span class="muted small">{{ p.get_mode_display }}{% if p.min_delivery_pct %} · skips vendors under {{ p.min_delivery_pct }}% delivered{% endif %} · {{ p.n_customers }} customer{{ p.n_customers|pluralize }}</span></div>
+<section class="card" style="margin-bottom:16px"><div class="panelhead"><h2>{{ p.title }}</h2><span class="pill free">{{ p.get_mode_display }}</span><span class="muted small">{% if p.min_delivery_pct %}skips vendors under {{ p.min_delivery_pct }}% delivered · {% endif %}{{ p.n_customers }} customer{{ p.n_customers|pluralize }}</span></div>
 {% if p.notes %}<p class="muted small" style="margin-top:0">{{ p.notes }}</p>{% endif %}
-<div class="tablewrap"><table><thead><tr><th>Country</th><th>Network</th><th>Vendor</th><th class="num">Priority</th><th></th></tr></thead><tbody>
-{% for e in p.entries.all %}<tr><td>{{ e.country|default:"All countries" }}</td><td>{{ e.network|default:"All" }}</td><td><a href="/wholesale/accounts/{{ e.vendor_id }}/">{{ e.vendor }}</a></td><td class="num mono">{{ e.priority }}</td>
-<td><form method="post">{% csrf_token %}<button class="btn sm danger" name="delete_entry" value="{{ e.pk }}">Remove</button></form></td></tr>
-{% empty %}<tr><td colspan="5" class="empty">No vendors in this plan yet, so it routes nothing.</td></tr>{% endfor %}</tbody></table></div>
+{% if p.mode == "split" and p.split_total and p.split_total != 100 %}<p class="small" style="margin-top:0"><span class="pill warn">Check</span> Shares for one destination add up to {{ p.split_total }}. They're used as proportions, so this still works, but 100 is easier to read.</p>{% endif %}
+<div class="tablewrap"><table><thead><tr><th>Country</th><th>Network</th><th>Vendor</th><th class="num">Priority {% tip "priority" %}</th>{% if p.mode == "split" %}<th class="num">Share {% tip "share" %}</th>{% endif %}<th></th></tr></thead><tbody>
+{% for e in p.entries.all %}<tr><td>{{ e.country|default:"All countries" }}</td><td>{{ e.network|default:"All" }}</td><td><a href="/wholesale/accounts/{{ e.vendor_id }}/">{{ e.vendor }}</a></td><td class="num mono">{{ e.priority }}</td>{% if p.mode == "split" %}<td class="num mono">{% if e.share %}{{ e.share }}%{% else %}<span class="muted">Failover</span>{% endif %}</td>{% endif %}
+<td class="rowacts"><form method="post">{% csrf_token %}<button class="btn sm danger" name="delete_entry" value="{{ e.pk }}">Remove</button></form></td></tr>
+{% empty %}<tr><td colspan="6" class="empty"><div class="emptystate"><b>No vendors in this plan yet</b><span>Customers on this plan can't send until you add at least one vendor below.</span></div></td></tr>{% endfor %}</tbody></table></div>
 <form method="post" class="filters" style="margin-top:10px">{% csrf_token %}<input type="hidden" name="form" value="entry"><input type="hidden" name="plan" value="{{ p.pk }}">
-<label>Country{{ entry_form.country }}</label><label>Network{{ entry_form.network }}</label><label>Vendor{{ entry_form.vendor }}</label><label>Priority{{ entry_form.priority }}</label><button class="btn">+ Add vendor</button></form>
+<label>Country{{ entry_form.country }}</label><label>Network{{ entry_form.network }}</label><label>Vendor{{ entry_form.vendor }}</label><label>Priority{{ entry_form.priority }}</label>{% if p.mode == "split" %}<label>Share %{{ entry_form.share }}</label>{% endif %}<button class="btn">+ Add vendor</button></form>
 </section>
+{% empty %}<section class="card" style="margin-bottom:16px"><div class="emptystate" style="padding:20px 0"><b>No route plans yet</b><span>Without a plan, customers use every vendor with a rate, cheapest first. Add a plan to pick vendors yourself, set an order, or split traffic by percentage.</span><a class="btn primary sm" href="#new-plan">Create your first plan</a></div></section>
 {% endfor %}
-<form method="post" class="card stack">{% csrf_token %}<input type="hidden" name="form" value="plan"><h2>New route plan</h2>
+<form method="post" class="card stack" id="new-plan">{% csrf_token %}<input type="hidden" name="form" value="plan"><h2>New route plan</h2>
 {% include "partials/form.html" with form=plan_form %}
 <div><button class="btn primary">Add plan</button></div></form>
 {% endblock %}

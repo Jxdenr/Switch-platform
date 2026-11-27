@@ -1,0 +1,4 @@
+{% if p %}<details class="pagehelp" data-help="{{ key }}"><summary><svg viewBox="0 0 16 16" width="16" height="16" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round" aria-hidden="true"><circle cx="8" cy="8" r="6.2"/><path d="M8 7.2V11M8 5v.01"/></svg><span class="ph-sum">{{ p.summary }}</span>{% if p.key or p.steps %}<em class="ph-toggle"><span class="ph-show">Show key</span><span class="ph-hide">Hide key</span></em>{% endif %}</summary>
+{% if p.key or p.steps %}<div class="ph-body">{% if p.key %}<dl class="ph-key">{% for term, meaning in p.key %}<div><dt>{{ term }}</dt><dd>{{ meaning }}</dd></div>{% endfor %}</dl>{% endif %}
+{% if p.steps %}<div class="ph-next"><b>Next steps</b>{% for label, url in p.steps %}<a class="btn sm" href="{{ url }}">{{ label }} →</a>{% endfor %}</div>{% endif %}</div>{% endif %}
+</details>{% endif %}

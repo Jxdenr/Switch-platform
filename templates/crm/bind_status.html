@@ -1,7 +1,8 @@
-{% extends "base.html" %}
+{% extends "base.html" %}{% load guide %}
 {% block title %}Bind status{% endblock %}
 {% block content %}
 <div class="pagehead"><div><h1>Bind status</h1><div class="sub">Every way suppliers send us SMS and clients receive it</div></div></div>
+{% page_help "binds" %}
 <div class="card"><h2>SMPP binds to us</h2><p class="muted" style="margin-top:0">Suppliers bind to send us SMS; clients bind to receive theirs. Status is live from our SMPP server.</p><div class="tablewrap"><table><thead><tr><th>Account</th><th>Direction</th><th>Title</th><th>Username</th><th>Allowed IPs</th><th>Status</th><th>Since</th></tr></thead><tbody>
 {% for u in smpp_users %}<tr><td><a href="/accounts/{{ u.account_id }}/">{{ u.account }}</a></td><td>{% if u.role == "client" %}Client receives{% else %}Supplier sends{% endif %}</td><td>{{ u.title }}</td><td class="mono">{{ u.username }}</td><td class="mono">{{ u.ip|default:"any" }}</td>
 <td>{% if not u.enabled %}<span class="pill free">Disabled</span>{% elif u.bound %}<span class="pill ok">Bound</span>{% else %}<span class="pill bad">Not bound</span>{% endif %}</td><td class="mono muted">{{ u.last_status_at|date:"d M H:i"|default:"never" }}</td></tr>

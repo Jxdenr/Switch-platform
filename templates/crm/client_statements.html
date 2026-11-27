@@ -1,7 +1,8 @@
-{% extends "base.html" %}{% load switch humanize %}
+{% extends "base.html" %}{% load guide switch humanize %}
 {% block title %}Statements{% endblock %}
 {% block content %}
 <div class="pagehead"><div><h1>Statements</h1><div class="sub">What {{ acc }} has earned for traffic delivered to you, and your monthly statements.</div></div></div>
+{% page_help "statements" %}
 <section class="card"><div class="panelhead"><h2>Monthly statements</h2></div>
 <p class="muted" style="margin-top:0">{% if acc.auto_statements and recipients %}Emailed on the 1st of each month to {{ recipients|join:", " }}.{% else %}Not emailed automatically. Ask your account manager to turn this on.{% endif %}</p>
 <div class="tablewrap"><table><thead><tr><th>Month</th><th>Number</th><th class="num">Total</th><th></th></tr></thead><tbody>
