@@ -1,7 +1,9 @@
+from django.conf import settings
 from django.contrib import admin
-from django.contrib.auth import views as auth_views
 from django.urls import path
 
+from core import auth_views as auth
+from core import team_views as team
 from core import views as core
 from crm import views as crm
 from inventory import views as inv
@@ -10,12 +12,29 @@ from voice import views as voice
 from wholesale import api as wapi
 from wholesale import views as ws
 
+# Django admin's own login would skip lockout and two-factor: use ours.
+admin.site.login = lambda request, extra_context=None: auth.login_view(request)
+
 urlpatterns = [
     path("", core.dashboard, name="dashboard"),
     path("ui/", core.set_ui, name="set_ui"),
-    path("health/", core.health),
-    path("login/", auth_views.LoginView.as_view(template_name="core/login.html"), name="login"),
-    path("logout/", auth_views.LogoutView.as_view(), name="logout"),
+    path("health/", core.health, name="health"),
+    # Sign in and security
+    path("login/", auth.login_view, name="login"),
+    path("login/code/", auth.login_code, name="login_code"),
+    path("logout/", auth.logout_view, name="logout"),
+    path("password/forgot/", auth.password_reset, name="password_reset"),
+    path("password/set/<uidb64>/<token>/", auth.set_password, name="set_password"),
+    path("account/security/", auth.security_page, name="security"),
+    # Logins and portals
+    path("team/", team.team, name="team"),
+    path("team/new/", team.team_edit, name="team_new"),
+    path("team/<int:pk>/", team.team_edit, name="team_edit"),
+    path("team/<int:pk>/action/", team.team_action, name="team_action"),
+    path("settings/", team.portal_settings, name="portal_settings"),
+    path("platform/", team.platform, name="platform"),
+    path("platform/<int:pk>/", team.platform_portal, name="platform_portal"),
+    path("platform/<int:pk>/owners/<int:profile_pk>/", team.platform_owner_action, name="platform_owner_action"),
     # CRM
     path("accounts/", crm.account_list, name="account_list"),
     path("suppliers/", crm.account_list, {"kind": "supplier"}, name="supplier_list"),
@@ -60,5 +79,4 @@ urlpatterns = [
     path("voice/cdrs/", voice.cdrs, name="cdrs"),
     path("voice/stats/", voice.stats, name="voice_stats"),
     path("ingest/freeswitch/", voice.ingest_freeswitch, name="ingest_freeswitch"),
-    path("admin/", admin.site.urls),
-]
+] + ([path("admin/", admin.site.urls)] if settings.DJANGO_ADMIN_ENABLED else [])

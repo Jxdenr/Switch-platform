@@ -3,11 +3,17 @@ import math
 from datetime import datetime, timezone as dt_tz
 from decimal import Decimal
 
+import logging
+
 from django.db import transaction
+
+from core.tenancy import use_tenant
 
 from inventory.models import Allocation, Number
 from inventory.services import normalise
 from .models import Call
+
+logger = logging.getLogger(__name__)
 
 
 def billable_seconds(billsec, first, nxt, minimum=0):
@@ -48,6 +54,15 @@ def record_call(*, uuid, number_called, caller_id="", start=None, answer=None, e
                 end_stamp=end, duration=duration, billsec=billsec,
                 **{k: v for k, v in extra.items() if v not in (None, "")})
     number = Number.objects.select_related("billing_group__supplier", "billing_group__currency").filter(number=dest).first()
+    if not number:
+        # A call to a number no portal has: nobody to bill or show it to.
+        logger.warning("Dropped CDR %s to unknown number %s", uuid, dest)
+        return call
+    with use_tenant(number.tenant_id):
+        return _bill(call, number, billsec)
+
+
+def _bill(call, number, billsec):
     if number:
         g = number.billing_group
         call.number, call.billing_group, call.supplier, call.currency = number, g, g.supplier, g.currency.code

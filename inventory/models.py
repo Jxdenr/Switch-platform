@@ -10,11 +10,13 @@ Flow, same as the original platform:
 from django.db import models
 from django.utils import timezone
 
+from core.tenancy import TenantOwned
+
 SMS, VOICE = "sms", "voice"
 CHANNELS = [(SMS, "SMS"), (VOICE, "Voice")]
 
 
-class BillingGroup(models.Model):
+class BillingGroup(TenantOwned):
     VOICE, SMS, BOTH = "voice", "sms", "both"
     ROUTING_TYPES = [(SMS, "SMS"), (VOICE, "Voice"), (BOTH, "SMS & voice")]
 
@@ -60,7 +62,7 @@ class BillingGroup(models.Model):
         return total, allocated, total - allocated
 
 
-class BillingGroupRate(models.Model):
+class BillingGroupRate(TenantOwned):
     """One row per channel, payment-terms slot (1-3) and time-of-day band."""
 
     billing_group = models.ForeignKey(BillingGroup, on_delete=models.CASCADE, related_name="rates")
@@ -78,7 +80,7 @@ class BillingGroupRate(models.Model):
         unique_together = [("billing_group", "channel", "slot", "time_of_day")]
 
 
-class Number(models.Model):
+class Number(TenantOwned):
     number = models.CharField(max_length=20, unique=True, help_text="E.164 digits, no +")
     billing_group = models.ForeignKey(BillingGroup, on_delete=models.PROTECT, related_name="numbers")
     blocked = models.BooleanField(default=False)
@@ -99,7 +101,7 @@ class Number(models.Model):
                 .select_related("client", "payment_terms").first())
 
 
-class Allocation(models.Model):
+class Allocation(TenantOwned):
     """A number given to a client for one channel. History is kept: unallocating sets ends_at.
     A number in an "SMS & voice" group can have one active SMS allocation and one active voice
     allocation (normally to the same client)."""
@@ -127,7 +129,7 @@ class Allocation(models.Model):
         return f"{self.number} -> {self.client} ({self.channel})"
 
 
-class AllocationRate(models.Model):
+class AllocationRate(TenantOwned):
     """The client's payout for this allocation, per terms slot and time band."""
 
     allocation = models.ForeignKey(Allocation, on_delete=models.CASCADE, related_name="rates")

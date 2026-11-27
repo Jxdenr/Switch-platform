@@ -1,10 +1,11 @@
-<!doctype html>
-<html lang="en" data-cw="harbour"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width, initial-scale=1">
-<title>Sign in · Switch</title>{% load static %}
-<link rel="stylesheet" href="{% static 'css/app.css' %}"></head>
-<body><div class="login"><form class="card" method="post">{% csrf_token %}
-<a class="brand" href="/" style="color:var(--fg)"><i>SW</i><span>Switch</span></a>
+{% include "core/_auth_head.html" with auth_title="Sign in" %}
+<body><div class="login"><form class="card" method="post" action="/login/">{% csrf_token %}
 <h1 style="margin:0;font-size:20px">Sign in</h1>
+{% for m in messages %}<div class="flash{% if m.tags == 'error' %} error{% endif %}" role="status">{{ m }}</div>{% endfor %}
+{% if request.GET.reset == "sent" %}<div class="flash" role="status">If that email has a login, we've sent a link to choose a new password.</div>{% endif %}
+{% if request.GET.reset == "done" %}<div class="flash" role="status">Password set. Sign in with it now.</div>{% endif %}
 {% include "partials/form.html" %}
+<input type="hidden" name="next" value="{{ next }}">
 <button class="btn primary">Sign in</button>
+<a href="/password/forgot/" class="muted">Forgotten your password?</a>
 </form></div></body></html>

@@ -3,8 +3,10 @@ import uuid
 
 from django.db import models
 
+from core.tenancy import TenantOwned
 
-class Message(models.Model):
+
+class Message(TenantOwned):
     RECEIVED, FORWARDED, FAILED, NO_ROUTE, BLOCKED = "received", "forwarded", "failed", "no_route", "blocked"
     STATUSES = [(RECEIVED, "Received"), (FORWARDED, "Forwarded"), (FAILED, "Forward failed"),
                 (NO_ROUTE, "No route"), (BLOCKED, "Blocked")]
@@ -61,7 +63,7 @@ class Message(models.Model):
         return "HTTP" if self.http_endpoint_id else ("SMPP" if self.client_bind_id else "")
 
 
-class BlockRule(models.Model):
+class BlockRule(TenantOwned):
     """Replaces Restrictions, SMS Restrictions and Black List on the old platform.
 
     A rule applies to everyone, to one supplier's traffic, to one client's traffic, or to one

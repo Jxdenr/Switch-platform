@@ -1,0 +1,28 @@
+{% extends "base.html" %}
+{% block title %}Security{% endblock %}
+{% block content %}
+<div class="pagehead"><div><h1>Password and two-factor</h1><div class="sub">Signed in as {{ user.email|default:user.username }}</div></div></div>
+{% if setup and required and not p.totp_enabled %}<div class="flash error" role="status">Your login has to use two-factor sign-in. Set it up below to continue.</div>{% endif %}
+<section class="card stack"><h2>Two-factor sign-in</h2>
+{% if p.totp_enabled %}
+  <p><span class="pill ok">On</span> You enter a code from your authenticator app each time you sign in.</p>
+  {% if not required %}<form method="post" class="stack" style="max-width:360px">{% csrf_token %}<input type="hidden" name="action" value="disable">
+    <div class="field"><label for="dis-pw">Your password, to turn it off</label><input type="password" name="password" id="dis-pw" autocomplete="current-password"></div>
+    <div><button class="btn danger">Turn off two-factor</button></div></form>
+  {% else %}<p class="muted">Your login must use it, so it can't be turned off.</p>{% endif %}
+{% else %}
+  <p>Two-factor stops anyone signing in with only your password. You'll need an authenticator app on your phone (Google Authenticator, Microsoft Authenticator, 1Password or similar).</p>
+  <ol><li>In the app, add an account and scan this code.</li><li>Type the 6-digit code it shows.</li></ol>
+  <div style="display:flex;gap:20px;flex-wrap:wrap;align-items:flex-start">
+    <div style="width:200px;background:#fff;padding:6px;border-radius:8px" aria-label="QR code for your authenticator app">{{ qr|safe }}</div>
+    <div class="stack" style="max-width:360px"><p class="muted" style="margin:0">Can't scan? Enter this key instead:<br><code style="font-size:14px">{{ secret }}</code></p>
+      <form method="post" class="stack">{% csrf_token %}<input type="hidden" name="action" value="enable">{% include "partials/form.html" with form=code_form %}
+      <div><button class="btn primary">Turn on two-factor</button></div></form></div>
+  </div>
+{% endif %}
+</section>
+<section class="card stack" style="max-width:520px"><h2>Change password</h2>
+<form method="post" class="stack">{% csrf_token %}<input type="hidden" name="action" value="password">{% include "partials/form.html" with form=pw_form %}
+<div><button class="btn primary">Change password</button></div></form>
+<p class="muted" style="margin:0">Changing it signs you out everywhere else.</p></section>
+{% endblock %}

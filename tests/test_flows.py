@@ -8,6 +8,7 @@ from django.core.management import call_command
 from django.test import TestCase, override_settings
 from django.utils import timezone
 
+from tests.base import PortalMixin, make_login
 from core.models import Country, Currency, PaymentTerms, TimeOfDay
 from crm.models import Account, HttpEndpoint, SmppUser
 from inventory import services
@@ -16,10 +17,10 @@ from sms.models import BlockRule, Message
 
 
 @override_settings(INGEST_TOKEN="t0k")
-class FlowTests(TestCase):
+class FlowTests(PortalMixin, TestCase):
     def setUp(self):
         call_command("seed_lookups", verbosity=0)
-        self.admin = User.objects.create_superuser("admin", "a@example.com", "pass-12345678")
+        self.admin = make_login("admin", self.tenant)
         self.client.force_login(self.admin)
         self.terms = PaymentTerms.objects.get(title="30/45")
         self.supplier = Account.objects.create(title="Sup", is_supplier=True)
@@ -108,7 +109,7 @@ class FlowTests(TestCase):
         self.assertEqual(self.client.post("/numbers/bulk/", {"action": "unallocate"}).status_code, 403)
 
 
-class ChannelTests(TestCase):
+class ChannelTests(PortalMixin, TestCase):
     """Numbers in an 'SMS & voice' group are uploaded once and can be allocated per channel."""
 
     def setUp(self):
@@ -153,7 +154,7 @@ class ChannelTests(TestCase):
 
 
 @override_settings(INGEST_TOKEN="t0k")
-class VoiceTests(TestCase):
+class VoiceTests(PortalMixin, TestCase):
     """Call records: billing increments, routing on the voice allocation, FreeSWITCH ingest, stats."""
 
     def setUp(self):
@@ -220,7 +221,7 @@ class VoiceTests(TestCase):
             self.client.post("/ingest/freeswitch/?token=t0k", json.dumps(self._cdr(f"u{i}", to)),
                              content_type="application/json")
         Call.objects.update(start_stamp=timezone.now())
-        staff = User.objects.create_superuser("admin", "a@example.com", "pass-12345678")
+        staff = make_login("admin", self.tenant)
         self.client.force_login(staff)
         self.assertContains(self.client.get("/voice/cdrs/"), "447700900101")
         r = self.client.get("/voice/stats/?by=client")

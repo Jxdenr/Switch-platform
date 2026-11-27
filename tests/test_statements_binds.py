@@ -14,6 +14,7 @@ from django.core.management import call_command
 from django.test import TestCase, TransactionTestCase, override_settings
 from django.utils import timezone
 
+from tests.base import PortalMixin, make_login
 from core.models import Country, Currency, PaymentTerms
 from crm import statements as st
 from crm.models import Account, Document, HttpEndpoint, HttpUser, SmppUser
@@ -42,7 +43,7 @@ def setup_world(t):
 
 
 @override_settings(COMPANY_NAME="Test Co")
-class StatementTests(TestCase):
+class StatementTests(PortalMixin, TestCase):
     def setUp(self):
         setup_world(self)
         HttpEndpoint.objects.create(account=self.cli, title="hook", url="https://example.com/hook")
@@ -79,7 +80,7 @@ class StatementTests(TestCase):
         self.assertEqual(len(mail.outbox), 2)
 
     def test_statement_tab_export_and_document_page(self):
-        admin = User.objects.create_superuser("admin", "a@example.com", "pass-12345678")
+        admin = make_login("admin", self.tenant)
         self.client.force_login(admin)
         r = self.client.get(f"/accounts/{self.sup.pk}/?tab=statement&by=day")
         self.assertContains(r, "Monthly invoices")
@@ -92,7 +93,7 @@ class StatementTests(TestCase):
         self.assertContains(self.client.get("/clients/"), ">Cli<")
 
 
-class HttpBindTests(TestCase):
+class HttpBindTests(PortalMixin, TestCase):
     def setUp(self):
         setup_world(self)
         HttpEndpoint.objects.create(account=self.cli, title="hook", url="https://example.com/hook")
@@ -112,7 +113,7 @@ class HttpBindTests(TestCase):
 
 
 @override_settings(FORWARD_MAX_ATTEMPTS=5)
-class SmppServerTests(TransactionTestCase):
+class SmppServerTests(PortalMixin, TransactionTestCase):
     """A real SMPP session over TCP, using the smpplib client as supplier and as client."""
 
     def setUp(self):

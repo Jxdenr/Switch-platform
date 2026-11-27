@@ -14,7 +14,7 @@
   <a href="/wholesale/accounts/{{ acc.pk }}/">Wholesale</a>
   <a href="?tab=voice" class="{% if tab == 'voice' %}on{% endif %}">Voice</a>
   <a href="?tab=details" class="{% if tab == 'details' %}on{% endif %}">Contacts &amp; details</a>
-  <a href="?tab=statement" class="{% if tab == 'statement' %}on{% endif %}">Statement</a>
+  {% if can_money %}<a href="?tab=statement" class="{% if tab == 'statement' %}on{% endif %}">Statement</a>{% endif %}
   <a href="?tab=users" class="{% if tab == 'users' %}on{% endif %}">Portal users</a>
 </nav>
 {% if tab == "groups" %}

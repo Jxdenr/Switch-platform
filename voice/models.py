@@ -5,8 +5,10 @@ billing we work out when the CDR arrives.
 """
 from django.db import models
 
+from core.tenancy import TenantOwned
 
-class Call(models.Model):
+
+class Call(TenantOwned):
     uuid = models.CharField(max_length=64, unique=True)
     start_stamp = models.DateTimeField(db_index=True)
     answer_stamp = models.DateTimeField(null=True, blank=True)

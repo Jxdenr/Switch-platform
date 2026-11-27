@@ -8,6 +8,9 @@ BASE_DIR = Path(__file__).resolve().parent.parent
 
 SECRET_KEY = os.environ.get("SECRET_KEY", "dev-only-insecure-key")
 DEBUG = os.environ.get("DEBUG", "1") == "1"
+if not DEBUG and (SECRET_KEY == "dev-only-insecure-key" or len(SECRET_KEY) < 40):
+    from django.core.exceptions import ImproperlyConfigured
+    raise ImproperlyConfigured("Set SECRET_KEY to a long random value in .env before running with DEBUG=0.")
 ALLOWED_HOSTS = os.environ.get("ALLOWED_HOSTS", "localhost,127.0.0.1").split(",")
 CSRF_TRUSTED_ORIGINS = [o for o in os.environ.get("CSRF_TRUSTED_ORIGINS", "").split(",") if o]
 
@@ -35,6 +38,10 @@ MIDDLEWARE = [
     "django.middleware.csrf.CsrfViewMiddleware",
     "django.contrib.auth.middleware.AuthenticationMiddleware",
     "django.contrib.messages.middleware.MessageMiddleware",
+    # Every page needs a login unless the view is marked @login_not_required.
+    "django.contrib.auth.middleware.LoginRequiredMiddleware",
+    "core.middleware.TenantMiddleware",
+    "core.middleware.TwoFactorSetupMiddleware",
     "django.middleware.clickjacking.XFrameOptionsMiddleware",
 ]
 
@@ -65,9 +72,16 @@ DATABASES = {
     )
 }
 
+# Argon2 for new and changed passwords; older PBKDF2 hashes still work and are upgraded on sign-in.
+PASSWORD_HASHERS = [
+    "django.contrib.auth.hashers.Argon2PasswordHasher",
+    "django.contrib.auth.hashers.PBKDF2PasswordHasher",
+]
 AUTH_PASSWORD_VALIDATORS = [
-    {"NAME": "django.contrib.auth.password_validation.MinimumLengthValidator", "OPTIONS": {"min_length": 10}},
+    {"NAME": "django.contrib.auth.password_validation.UserAttributeSimilarityValidator"},
+    {"NAME": "django.contrib.auth.password_validation.MinimumLengthValidator", "OPTIONS": {"min_length": 12}},
     {"NAME": "django.contrib.auth.password_validation.CommonPasswordValidator"},
+    {"NAME": "django.contrib.auth.password_validation.NumericPasswordValidator"},
 ]
 
 LANGUAGE_CODE = "en-gb"
@@ -84,8 +98,33 @@ LOGIN_URL = "login"
 LOGIN_REDIRECT_URL = "dashboard"
 LOGOUT_REDIRECT_URL = "login"
 
+# Sessions: signed out after 12 hours, cookies only over HTTPS when DEBUG is off.
+SESSION_COOKIE_AGE = int(os.environ.get("SESSION_HOURS", "12")) * 3600
+SESSION_COOKIE_HTTPONLY = True
+SESSION_COOKIE_SAMESITE = "Lax"
+PASSWORD_RESET_TIMEOUT = 3 * 86400  # invite and reset links last 3 days
+# Roles that must use an authenticator code, besides platform admins (always). E.g. "owner".
+REQUIRE_2FA_ROLES = [r for r in os.environ.get("REQUIRE_2FA_ROLES", "").split(",") if r]
+# Behind our own TLS proxy (Caddy): trust its X-Forwarded-Proto and last X-Forwarded-For entry.
+TRUST_PROXY = os.environ.get("TRUST_PROXY", "0" if DEBUG else "1") == "1"
+if TRUST_PROXY:
+    SECURE_PROXY_SSL_HEADER = ("HTTP_X_FORWARDED_PROTO", "https")
+if not DEBUG:
+    SESSION_COOKIE_SECURE = CSRF_COOKIE_SECURE = True
+    SECURE_SSL_REDIRECT = os.environ.get("SECURE_SSL_REDIRECT", "1") == "1"
+    SECURE_REDIRECT_EXEMPT = [r"^health/$", r"^ingest/", r"^api/"]  # machine endpoints
+    SECURE_HSTS_SECONDS = int(os.environ.get("HSTS_SECONDS", "31536000"))
+    SECURE_CONTENT_TYPE_NOSNIFF = True
+    SECURE_REFERRER_POLICY = "same-origin"
+X_FRAME_OPTIONS = "DENY"
+# Django's built-in database admin reaches every portal's data. Off unless DJANGO_ADMIN=1.
+DJANGO_ADMIN_ENABLED = os.environ.get("DJANGO_ADMIN", "1" if DEBUG else "0") == "1"
+
 # Inbound SMS from Jasmin is posted to /ingest/jasmin/ with this shared secret.
 INGEST_TOKEN = os.environ.get("INGEST_TOKEN", "dev-ingest-token")
+if not DEBUG and (INGEST_TOKEN == "dev-ingest-token" or INGEST_TOKEN.startswith("CHANGE") or len(INGEST_TOKEN) < 24):
+    from django.core.exceptions import ImproperlyConfigured
+    raise ImproperlyConfigured("Set INGEST_TOKEN to a long random value in .env before running with DEBUG=0.")
 # Jasmin management (jCli) used by `manage.py sync_jasmin`.
 JASMIN_JCLI_HOST = os.environ.get("JASMIN_JCLI_HOST", "jasmin")
 JASMIN_JCLI_PORT = int(os.environ.get("JASMIN_JCLI_PORT", "8990"))

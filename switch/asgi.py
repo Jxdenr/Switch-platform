@@ -11,6 +11,8 @@ import os
 
 from django.core.asgi import get_asgi_application
 
+# Web requests are only ever scoped to one portal (see core.tenancy).
+os.environ.pop("SWITCH_CLI_ALL_PORTALS", None)
 os.environ.setdefault("DJANGO_SETTINGS_MODULE", "switch.settings")
 
 application = get_asgi_application()

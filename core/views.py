@@ -4,14 +4,14 @@ from django.shortcuts import redirect, render
 from django.utils import timezone
 from django.views.decorators.http import require_POST
 
-from core.access import client_account
+from core.access import machine_endpoint, client_account, portal_view, require
 from crm.models import SmppUser, Smsc
 from inventory.models import Allocation, Number
 from sms.models import Message
 from voice.models import Call
 
 
-@login_required
+@portal_view()
 def dashboard(request):
     from . import dashboard as d
     acc = client_account(request.user)
@@ -78,5 +78,6 @@ def set_ui(request):
     return resp
 
 
+@machine_endpoint
 def health(request):
     return HttpResponse("ok")

@@ -9,7 +9,7 @@ from django.shortcuts import get_object_or_404, redirect, render
 from django.utils import timezone
 from django.views.decorators.http import require_POST
 
-from core.access import client_account, staff_required
+from core.access import client_account, portal_view, require
 from core.models import Country, PaymentTerms, TimeOfDay
 from crm.models import Account
 from . import services
@@ -106,7 +106,7 @@ def _group_qs():
     ).order_by("country__name", "title")
 
 
-@staff_required
+@require("numbers")
 def group_list(request):
     qs = _group_qs()
     f = request.GET
@@ -136,7 +136,7 @@ def group_list(request):
     })
 
 
-@staff_required
+@require("numbers")
 def group_edit(request, pk=None):
     obj = get_object_or_404(BillingGroup, pk=pk) if pk else None
     form = BillingGroupForm(request.POST or None, instance=obj,
@@ -175,7 +175,7 @@ def group_edit(request, pk=None):
                                                          "group_rules": group_rules})
 
 
-@staff_required
+@require("numbers")
 def group_detail(request, pk):
     g = get_object_or_404(_group_qs(), pk=pk)
     return redirect(f"/numbers/?group={g.pk}")
@@ -193,7 +193,7 @@ class AddNumbersForm(forms.Form):
     other_country = forms.BooleanField(required=False, label="Allow numbers from another country")
 
 
-@staff_required
+@require("numbers")
 def add_numbers(request):
     form = AddNumbersForm(request.POST or None, request.FILES or None,
                           initial={"billing_group": request.GET.get("group")})
@@ -290,6 +290,7 @@ def _numbers_qs(request):
     return qs.distinct()
 
 
+@portal_view("numbers")
 def number_list(request):
     if not request.user.is_authenticated:
         return redirect("login")
@@ -388,7 +389,7 @@ def _carry(request):
     return keep
 
 
-@staff_required
+@require("numbers")
 def bulk_action(request):
     if request.method != "POST":
         return redirect("number_list")
@@ -494,7 +495,7 @@ def _free_numbers(group=None, country=None, use_for="both"):
     return qs.select_related("billing_group").order_by("number")
 
 
-@staff_required
+@require("numbers")
 def allocate_quantity(request):
     """Allocate the next N free numbers (optionally from one billing group or country) in one go."""
     from sms.models import BlockRule

@@ -1,0 +1,16 @@
+{% extends "base.html" %}
+{% block title %}Portals{% endblock %}
+{% block content %}
+<div class="pagehead"><div><h1>Portals</h1><div class="sub">Each portal is a separate business on this switch, with its own customers, numbers, traffic and logins. This login only manages portals. It can't see any portal's data.</div></div></div>
+{% include "core/_invite.html" %}
+<div class="tablewrap"><table><thead><tr><th>Portal</th><th class="num">Logins</th><th>Owner set</th><th>Created</th><th>Status</th></tr></thead><tbody>
+{% for t in portals %}<tr><td><a href="/platform/{{ t.pk }}/">{{ t.name }}</a></td><td class="num mono">{{ t.n_logins }}</td>
+<td>{% if t.n_owners %}Yes{% else %}<span class="pill bad">No owner</span>{% endif %}</td><td class="muted">{{ t.created_at|date:"j M Y" }}</td>
+<td>{% if t.active %}<span class="pill ok">Active</span>{% else %}<span class="pill bad">Suspended</span>{% endif %}</td></tr>
+{% empty %}<tr><td colspan="5" class="empty">No portals yet. Create the first one below (your own business is a portal too).</td></tr>{% endfor %}
+</tbody></table></div>
+<section class="card stack" style="max-width:640px"><h2>New portal</h2>
+<p class="muted" style="margin:0">It starts empty. The owner gets a link to choose a password, then sets up their own company details, customers and team.</p>
+<form method="post" class="stack">{% csrf_token %}{% include "partials/form.html" %}
+<div><button class="btn primary">Create portal and invite owner</button></div></form></section>
+{% endblock %}

@@ -1,0 +1,23 @@
+{% extends "base.html" %}
+{% block title %}{{ t.name }}{% endblock %}
+{% block content %}
+<div class="crumbs"><a href="/platform/">Portals</a></div>
+<div class="pagehead"><div><h1>{{ t.name }}</h1><div class="sub">{{ n_logins }} login{{ n_logins|pluralize }} · {{ size.accounts }} customer account{{ size.accounts|pluralize }} · {{ size.numbers }} number{{ size.numbers|pluralize }}</div></div></div>
+{% include "core/_invite.html" %}
+<section class="card stack" style="max-width:640px"><h2>Portal</h2>
+<form method="post" class="stack">{% csrf_token %}<input type="hidden" name="action" value="save">{% include "partials/form.html" %}
+<div><button class="btn primary">Save</button></div></form>
+<p class="muted" style="margin:0">Suspending signs everyone in this portal out. Their binds and traffic keep running; turn those off in the portal itself.</p></section>
+<section class="card stack"><h2>Owners</h2>
+<div class="tablewrap"><table><thead><tr><th>Name</th><th>Email</th><th>Two-factor</th><th>Status</th><th></th></tr></thead><tbody>
+{% for p in owners %}<tr><td>{{ p.user.get_full_name }}</td><td>{{ p.user.email }}</td><td>{% if p.totp_enabled %}<span class="pill ok">On</span>{% else %}<span class="muted">Off</span>{% endif %}</td>
+<td>{% if not p.user.is_active %}<span class="pill free">Disabled</span>{% elif not p.user.has_usable_password %}<span class="pill">Invited</span>{% else %}<span class="pill ok">Active</span>{% endif %}</td>
+<td style="white-space:nowrap"><form method="post" action="/platform/{{ t.pk }}/owners/{{ p.pk }}/" style="display:inline">{% csrf_token %}
+<button class="btn sm" name="action" value="invite">{% if p.user.has_usable_password %}Send password reset{% else %}Resend invite{% endif %}</button>
+{% if p.totp_enabled %}<button class="btn sm" name="action" value="reset_2fa">Reset two-factor</button>{% endif %}
+{% if p.user.is_active %}<button class="btn sm" name="action" value="disable">Disable</button>{% else %}<button class="btn sm" name="action" value="enable">Enable</button>{% endif %}</form></td></tr>
+{% empty %}<tr><td colspan="5" class="empty">No owner yet. Add one below.</td></tr>{% endfor %}</tbody></table></div>
+<h3>Add an owner</h3>
+<form method="post" class="stack" style="max-width:640px">{% csrf_token %}<input type="hidden" name="action" value="add_owner">{% include "partials/form.html" with form=owner_form %}
+<div><button class="btn">Add owner and send invite</button></div></form></section>
+{% endblock %}

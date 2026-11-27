@@ -16,6 +16,8 @@ from decimal import Decimal
 from django.conf import settings
 from django.db import models
 
+from core.tenancy import TenantOwned
+
 
 def new_id():
     return uuid.uuid4().hex
@@ -49,7 +51,7 @@ class NetworkPrefix(models.Model):
         return self.prefix
 
 
-class RoutePlan(models.Model):
+class RoutePlan(TenantOwned):
     """A named set of routes, e.g. "Premium" or "Standard". Each customer uses one plan.
 
     Least cost: cheapest vendor first. Priority: the order you set. Best delivery: the vendor
@@ -58,7 +60,7 @@ class RoutePlan(models.Model):
     LCR, PRIORITY, QUALITY = "lcr", "priority", "quality"
     MODES = [(LCR, "Least cost"), (PRIORITY, "Priority order"), (QUALITY, "Best delivery rate")]
 
-    title = models.CharField(max_length=60, unique=True)
+    title = models.CharField(max_length=60)
     mode = models.CharField(max_length=8, choices=MODES, default=LCR)
     min_delivery_pct = models.PositiveSmallIntegerField(
         "Skip vendors delivering under (%)", null=True, blank=True,
@@ -68,12 +70,13 @@ class RoutePlan(models.Model):
 
     class Meta:
         ordering = ["title"]
+        unique_together = [("tenant", "title")]
 
     def __str__(self):
         return self.title
 
 
-class RouteEntry(models.Model):
+class RouteEntry(TenantOwned):
     """One vendor allowed for a destination in a plan. Blank country = every country."""
 
     plan = models.ForeignKey(RoutePlan, on_delete=models.CASCADE, related_name="entries")
@@ -91,7 +94,7 @@ class RouteEntry(models.Model):
         return f"{self.plan}: {self.country or 'All countries'} -> {self.vendor} ({self.priority})"
 
 
-class Customer(models.Model):
+class Customer(TenantOwned):
     """Wholesale settings for an account that sends us traffic."""
 
     ACCEPTED, DELIVERED = "accepted", "delivered"
@@ -128,7 +131,7 @@ class Customer(models.Model):
         return not allowed or sender.lower() in allowed
 
 
-class LedgerEntry(models.Model):
+class LedgerEntry(TenantOwned):
     """Top-ups, payments and manual adjustments to a customer's balance. Per-message charges are
     stored on each message instead."""
 
@@ -142,7 +145,7 @@ class LedgerEntry(models.Model):
         ordering = ["-at"]
 
 
-class Vendor(models.Model):
+class Vendor(TenantOwned):
     account = models.OneToOneField("crm.Account", on_delete=models.CASCADE, related_name="wholesale_vendor")
     enabled = models.BooleanField(default=True)
     route_type = models.CharField(max_length=20, blank=True,
@@ -153,7 +156,7 @@ class Vendor(models.Model):
         return str(self.account)
 
 
-class VendorBind(models.Model):
+class VendorBind(TenantOwned):
     """We bind out to a vendor's SMSC (we are the SMPP client) and send traffic over it."""
 
     TRX, TX_RX = "trx", "tx_rx"
@@ -185,7 +188,7 @@ class VendorBind(models.Model):
         return f"{self.title} ({self.host}:{self.port})"
 
 
-class TestSettings(models.Model):
+class TestSettings(TenantOwned):
     """Abstract: settings shared by both kinds of customer bind."""
 
     tps = models.PositiveSmallIntegerField("Max messages per second", default=20)
@@ -230,7 +233,7 @@ class SmppTestSettings(TestSettings):
         verbose_name = "wholesale SMPP settings"
 
 
-class Rate(models.Model):
+class Rate(TenantOwned):
     """Price per message for a country, or one network in it. Network beats country."""
 
     country = models.ForeignKey("core.Country", on_delete=models.CASCADE, related_name="+")
@@ -261,7 +264,7 @@ class BuyRate(Rate):
         unique_together = [("account", "country", "network")]
 
 
-class OutboundMessage(models.Model):
+class OutboundMessage(TenantOwned):
     """One wholesale message part. Long messages are one record per part, each with its own
     message ID and receipt, which is how SMPP works end to end."""
 

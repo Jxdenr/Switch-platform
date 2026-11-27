@@ -8,6 +8,7 @@ from django.core.management import call_command
 from django.test import TestCase
 from django.utils import timezone
 
+from tests.base import PortalMixin, make_login
 from core.models import Country, Currency, PaymentTerms, Profile, TimeOfDay
 from crm.models import Account
 from inventory import services
@@ -15,10 +16,10 @@ from inventory.models import BillingGroup, BillingGroupRate, Number
 from sms.models import Message
 
 
-class Base(TestCase):
+class Base(PortalMixin, TestCase):
     def setUp(self):
         call_command("seed_lookups", verbosity=0)
-        self.admin = User.objects.create_superuser("admin", "a@example.com", "pass-12345678")
+        self.admin = make_login("admin", self.tenant)
         self.client.force_login(self.admin)
         self.terms = PaymentTerms.objects.get(title="30/45")
         self.uk = Country.objects.get(name="United Kingdom")

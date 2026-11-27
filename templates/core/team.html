@@ -1,0 +1,21 @@
+{% extends "base.html" %}
+{% load switch %}
+{% block title %}Logins{% endblock %}
+{% block content %}
+<div class="pagehead"><div><h1>Logins</h1><div class="sub">Everyone who can sign in to {{ portal.name }}. Your team sees the areas you choose; clients only see their own account.</div></div>
+<div class="actions"><a class="btn primary" href="/team/new/">+ New login</a></div></div>
+{% include "core/_invite.html" %}
+<div class="tablewrap"><table><thead><tr><th>Name</th><th>Email</th><th>Kind</th><th>Can see</th><th>Two-factor</th><th>Status</th><th></th></tr></thead><tbody>
+{% for p in people %}<tr><td><a href="/team/{{ p.pk }}/">{{ p.user.get_full_name|default:p.user.email }}</a>{% if p.user == user %} <span class="muted">(you)</span>{% endif %}</td>
+<td class="muted">{{ p.user.email }}</td>
+<td>{% if p.role == "owner" %}Owner{% elif p.role == "client" %}Client · {{ p.account }}{% else %}Team{% if not p.can_edit %} · view only{% endif %}{% endif %}</td>
+<td>{% if p.role == "owner" %}Everything{% elif p.role == "client" %}Their own account{% else %}{% for s in p.sections %}{{ sections|get_item:s }}{% if not forloop.last %}, {% endif %}{% empty %}<span class="pill bad">Nothing</span>{% endfor %}{% endif %}</td>
+<td>{% if p.totp_enabled %}<span class="pill ok">On</span>{% else %}<span class="muted">Off</span>{% endif %}</td>
+<td>{% if not p.user.is_active %}<span class="pill free">Disabled</span>{% elif not p.user.has_usable_password %}<span class="pill">Invited</span>{% else %}<span class="pill ok">Active</span>{% endif %}</td>
+<td style="white-space:nowrap">{% if p.user != user %}<form method="post" action="/team/{{ p.pk }}/action/" style="display:inline">{% csrf_token %}
+{% if not p.user.has_usable_password %}<button class="btn sm" name="action" value="invite">Resend invite</button>{% endif %}
+{% if p.totp_enabled %}<button class="btn sm" name="action" value="reset_2fa">Reset two-factor</button>{% endif %}
+{% if p.user.is_active %}<button class="btn sm" name="action" value="disable">Disable</button>{% else %}<button class="btn sm" name="action" value="enable">Enable</button>{% endif %}</form>{% endif %}</td></tr>
+{% endfor %}</tbody></table></div>
+<p class="muted">Disabled logins are signed out straight away. SMPP and HTTP bind logins for your suppliers and clients are separate: set those up on each customer's page.</p>
+{% endblock %}

@@ -11,6 +11,7 @@ from django.conf import settings
 from django.db import transaction
 from django.utils import timezone
 
+from core.tenancy import use_tenant
 from crm.models import HttpUser, SmppUser, Smsc
 from inventory.models import Allocation, Number
 from inventory.services import normalise
@@ -51,7 +52,7 @@ def receive(*, source, destination, body, origin_connector="", smpp_username="",
                   body=body, source_ton=source_ton, source_npi=source_npi, dest_ton=dest_ton,
                   dest_npi=dest_npi, registered_delivery=registered_delivery)
 
-    # Which supplier bind did it arrive on?
+    # Which supplier bind did it arrive on? That decides the portal.
     if http_user:
         msg.http_user, msg.supplier = http_user, http_user.account
     elif smpp_username:
@@ -62,6 +63,19 @@ def receive(*, source, destination, body, origin_connector="", smpp_username="",
         msg.supplier = msg.smsc.account if msg.smsc else None
 
     number = Number.objects.select_related("billing_group__supplier", "billing_group__currency").filter(number=dest).first()
+    if msg.supplier and number and number.tenant_id != msg.supplier.tenant_id:
+        number = None  # another portal's number: never route across portals
+    tenant_id = msg.supplier.tenant_id if msg.supplier else (number.tenant_id if number else None)
+    if tenant_id is None:
+        # Arrived on no bind we know, for no number we know. Nobody to show it to: log and drop.
+        logger.warning("Dropped SMS from unknown bind %r to unknown number %s", smpp_username or origin_connector, dest)
+        return msg
+    with use_tenant(tenant_id):
+        msg.tenant_id = tenant_id
+        return _route(msg, number, dest, body)
+
+
+def _route(msg, number, dest, body):
     if number:
         msg.number = number
         msg.billing_group = number.billing_group

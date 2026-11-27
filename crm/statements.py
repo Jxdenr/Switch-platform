@@ -11,6 +11,8 @@ import io
 from datetime import date, datetime, time, timedelta
 from decimal import Decimal
 
+from email.utils import formataddr, parseaddr
+
 from django.conf import settings
 from django.core.mail import EmailMultiAlternatives
 from django.db import transaction
@@ -146,7 +148,8 @@ def document_context(account, kind, first, last, doc=None):
             "first": first, "last": last, "daily": daily, "by_group": by_group, "t": t, "doc": doc,
             "currency": (t["currencies"][0] if len(t["currencies"]) == 1 else ", ".join(t["currencies"]))
             or (account.currency.code if account.currency else ""),
-            "company_name": settings.COMPANY_NAME, "company_details": settings.COMPANY_DETAILS,
+            # Each portal's own company and bank details, never another portal's.
+            "company_name": account.tenant.legal_name, "company_details": account.tenant.company_details,
             "address": account.addresses.first(), "issued": doc.created_at.date() if doc else timezone.localdate()}
 
 
@@ -187,8 +190,12 @@ def send_document(doc, to=None):
     ctx = document_context(doc.account, doc.kind, doc.period_start, doc.period_end, doc)
     html = render_to_string("crm/document.html", {**ctx, "email": True})
     text = render_to_string("crm/document_email.txt", ctx)
-    subject = f'{ctx["kind_label"]} {doc.number} from {settings.COMPANY_NAME} ({doc.period_start:%B %Y})'
-    msg = EmailMultiAlternatives(subject, text, settings.DEFAULT_FROM_EMAIL, to)
+    tenant = doc.account.tenant
+    subject = f'{ctx["kind_label"]} {doc.number} from {tenant.legal_name} ({doc.period_start:%B %Y})'
+    # Sent from the platform's address (so SPF/DKIM pass) under the portal's name; replies go to the portal.
+    sender = formataddr((tenant.legal_name, parseaddr(settings.DEFAULT_FROM_EMAIL)[1]))
+    msg = EmailMultiAlternatives(subject, text, sender, to,
+                                 reply_to=[tenant.billing_email] if tenant.billing_email else None)
     msg.attach_alternative(html, "text/html")
     msg.attach(f"{doc.number}-daily.csv", rows_csv(ctx["daily"], "Day"), "text/csv")
     try:
