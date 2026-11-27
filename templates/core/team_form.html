@@ -1,0 +1,14 @@
+{% extends "base.html" %}
+{% block title %}{% if p %}Edit login{% else %}New login{% endif %}{% endblock %}
+{% block content %}
+<div class="crumbs"><a href="/team/">Logins</a></div>
+<div class="pagehead"><h1>{% if p %}{{ p.user.get_full_name|default:p.user.email }}{% else %}New login{% endif %}</h1></div>
+<form class="card stack" method="post" style="max-width:640px">{% csrf_token %}{% include "partials/form.html" %}
+<div><button class="btn primary">{% if p %}Save{% else %}Create and send invite{% endif %}</button> <a class="btn" href="/team/">Cancel</a></div></form>
+<script>
+(function(){const f=document.querySelector('form.card');const show=()=>{const r=(f.querySelector('[name=role]:checked')||{}).value;
+ const tog=(n,on)=>{const el=f.querySelector('[name='+n+']');if(el)el.closest('.field').style.display=on?'':'none'};
+ tog('sections',r==='member');tog('can_edit',r==='member');tog('account',r==='client')};
+ f.addEventListener('change',show);show()})();
+</script>
+{% endblock %}

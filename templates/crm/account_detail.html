@@ -15,7 +15,7 @@
   <a href="/wholesale/accounts/{{ acc.pk }}/">Outbound SMS</a>
   <a href="?tab=voice" class="{% if tab == 'voice' %}on{% endif %}">Voice</a>
   <a href="?tab=details" class="{% if tab == 'details' %}on{% endif %}">Contacts &amp; details</a>
-  <a href="?tab=statement" class="{% if tab == 'statement' %}on{% endif %}">Statement</a>
+  {% if can_money %}<a href="?tab=statement" class="{% if tab == 'statement' %}on{% endif %}">Statement</a>{% endif %}
   <a href="?tab=users" class="{% if tab == 'users' %}on{% endif %}">Portal users</a>
 </nav>
 {% if tab == "groups" %}
@@ -40,8 +40,8 @@
 {% if recipients %}<form method="post" action="/accounts/{{ acc.pk }}/documents/send/" style="display:inline">{% csrf_token %}<input type="hidden" name="kind" value="{{ doc_kind }}"><input type="hidden" name="month" value="{{ d|date:'Y-m' }}"><input type="hidden" name="resend" value="1"><button class="btn sm">Email now</button></form>{% endif %}</td></tr>
 {% endfor %}</tbody></table></div></section>
 {% elif tab == "users" %}
-<div class="card"><p style="margin-top:0">Client portal logins see only this account's numbers and SMS. Add them in <a href="/admin/auth/user/add/">Users &amp; settings</a>, then set their profile role to "Client portal" and account to {{ acc }}.</p>
-{% for p in users %}<div>{{ p.user.username }} · {{ p.get_role_display }}</div>{% empty %}<p class="muted">No portal users yet.</p>{% endfor %}</div>
+<div class="card"><p style="margin-top:0">Client portal logins see only this account's numbers, SMS and statements.{% if user.profile.role == "owner" %} <a href="/team/new/">Add one on the Logins page</a> and choose {{ acc }} as the client account.{% else %} Your portal owner adds them on the Logins page.{% endif %}</p>
+{% for p in users %}<div>{{ p.user.get_full_name|default:p.user.email }} · {{ p.user.email }}{% if not p.user.is_active %} · disabled{% endif %}</div>{% empty %}<p class="muted">No portal users yet.</p>{% endfor %}</div>
 {% else %}
 <div class="grid2 panels">
 {% for p in panels %}{% if p.group == tab or tab == "connections" and p.group == "sms" or tab == "sms" and p.group == "sms" %}

@@ -14,7 +14,7 @@ from django.utils import timezone
 from django.views.decorators.csrf import csrf_exempt
 from django.views.decorators.http import require_POST
 
-from core.access import client_account, staff_required
+from core.access import machine_endpoint, client_account, portal_view, require
 from core.models import log
 from crm.models import Account, HttpEndpoint, SmppUser, Smsc
 from . import routing
@@ -28,6 +28,18 @@ COLUMNS = [  # key, label, default on
     ("source_npi", "Source NPI", False), ("billing_group", "Billing group", False),
     ("rate_in", "Rate in", False), ("rate_out", "Rate out", False), ("body", "Message", True),
 ]
+
+
+def allowed_columns(user):
+    """Clients never see who supplied their traffic or what it cost us; team members without
+    Money see no rates."""
+    from core.access import can
+    hidden = set()
+    if client_account(user):
+        hidden |= {"supplier", "rate_in", "billing_group"}
+    elif not can(user, "money"):
+        hidden |= {"rate_in", "rate_out"}
+    return [c for c in COLUMNS if c[0] not in hidden]
 
 
 def _date_range(f):
@@ -69,18 +81,20 @@ def _filtered(request):
     return qs, start, end
 
 
-@login_required
+@portal_view("sms")
 def records(request):
     qs, start, end = _filtered(request)
-    cols = request.GET.getlist("col") or [k for k, _, on in COLUMNS if on]
+    columns = allowed_columns(request.user)
+    allowed = {k for k, _, _ in columns}
+    cols = [c for c in request.GET.getlist("col") if c in allowed] or [k for k, _, on in columns if on]
     if request.GET.get("export") == "csv":
         resp = HttpResponse(content_type="text/csv")
         resp["Content-Disposition"] = f'attachment; filename="sms-{start:%Y%m%d}-{end:%Y%m%d}.csv"'
         w = csv.writer(resp)
-        w.writerow([lbl for k, lbl, _ in COLUMNS if k in cols])
+        w.writerow([lbl for k, lbl, _ in columns if k in cols])
         for m in qs.iterator(chunk_size=5000):
             w.writerow([getattr(m, k) if k not in ("supplier", "client", "billing_group") else (getattr(m, k) or "")
-                        for k, _, _ in COLUMNS if k in cols])
+                        for k, _, _ in columns if k in cols])
         log(request.user, "sms.export", f"{start:%Y-%m-%d}..{end:%Y-%m-%d}")
         return resp
     totals = qs.aggregate(n=Count("pk"), due_in=Sum("rate_in"), due_out=Sum("rate_out"),
@@ -88,7 +102,7 @@ def records(request):
     page = Paginator(qs, int(request.GET.get("per", 50))).get_page(request.GET.get("page"))
     is_client = bool(client_account(request.user))
     return render(request, "sms/records.html", {
-        "page": page, "f": request.GET, "nav": "records", "totals": totals, "columns": COLUMNS, "cols": cols,
+        "page": page, "f": request.GET, "nav": "records", "totals": totals, "columns": columns, "cols": cols,
         "date_range": f"{start.astimezone():%Y-%m-%d %H:%M} - {end.astimezone():%Y-%m-%d %H:%M}",
         "is_client": is_client,
         "suppliers": Account.objects.filter(is_supplier=True) if not is_client else [],
@@ -99,7 +113,7 @@ def records(request):
     })
 
 
-@login_required
+@portal_view("sms")
 def ticker(request):
     if request.GET.get("format") == "json":
         qs = Message.objects.select_related("client").order_by("-received_at")
@@ -115,7 +129,7 @@ def ticker(request):
     return render(request, "sms/ticker.html", {"nav": "ticker"})
 
 
-@staff_required
+@require("sms", "money")
 def stats(request):
     qs, start, end = _filtered(request)
     by = request.GET.get("by", "supplier_client")
@@ -135,7 +149,7 @@ def stats(request):
         "date_range": f"{start.astimezone():%Y-%m-%d %H:%M} - {end.astimezone():%Y-%m-%d %H:%M}"})
 
 
-@staff_required
+@require("sms")
 @require_POST
 def resend(request, pk):
     m = get_object_or_404(Message, pk=pk)
@@ -191,7 +205,7 @@ class BlockRuleForm(forms.ModelForm):
         return r
 
 
-@staff_required
+@require("sms")
 def block_rules(request):
     form = BlockRuleForm(request.POST or None, initial={"scope": request.GET.get("scope") or BlockRule.ALL})
     if request.method == "POST":
@@ -224,6 +238,7 @@ def _int(v):
         return None
 
 
+@machine_endpoint
 @csrf_exempt
 @require_POST
 def ingest_jasmin(request):
@@ -252,10 +267,11 @@ def ingest_jasmin(request):
 
 
 def _client_ip(request):
-    fwd = request.META.get("HTTP_X_FORWARDED_FOR", "")
-    return fwd.split(",")[0].strip() if fwd else request.META.get("REMOTE_ADDR", "")
+    from core.security import client_ip
+    return client_ip(request) or ""
 
 
+@machine_endpoint
 @csrf_exempt
 def api_inbound(request):
     """A supplier's HTTP bind: they send SMS for our numbers here instead of over SMPP.

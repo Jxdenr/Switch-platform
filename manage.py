@@ -16,6 +16,9 @@ def main():
             "available on your PYTHONPATH environment variable? Did you "
             "forget to activate a virtual environment?"
         ) from exc
+    # Commands and workers (SMPP server, forwarders, statements) work across every portal.
+    # The web server never runs this file, so web requests stay locked to one portal.
+    os.environ["SWITCH_CLI_ALL_PORTALS"] = "1"
     execute_from_command_line(sys.argv)
 
 

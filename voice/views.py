@@ -11,7 +11,7 @@ from django.shortcuts import render
 from django.views.decorators.csrf import csrf_exempt
 from django.views.decorators.http import require_POST
 
-from core.access import client_account, staff_required
+from core.access import machine_endpoint, client_account, portal_view, require
 from crm.models import Account
 from sms.views import _date_range
 from .billing import from_freeswitch_json, record_call
@@ -45,12 +45,15 @@ def _filtered(request):
     return qs, start, end
 
 
-@login_required
+@portal_view("voice")
 def cdrs(request):
     qs, start, end = _filtered(request)
     is_client = bool(client_account(request.user))
     if request.GET.get("export") == "csv":
-        cols = [c for c in CDR_COLUMNS if not (is_client and c in ("rate_in", "due_in", "supplier", "from_ip"))]
+        from core.access import can
+        money = is_client or can(request.user, "money")
+        cols = [c for c in CDR_COLUMNS if not (is_client and c in ("rate_in", "due_in", "supplier", "from_ip"))
+                and (money or c not in ("rate_in", "rate_out", "due_in", "due_out"))]
         resp = HttpResponse(content_type="text/csv")
         resp["Content-Disposition"] = f'attachment; filename="cdrs-{start:%Y%m%d}-{end:%Y%m%d}.csv"'
         w = csv.writer(resp)
@@ -69,7 +72,7 @@ def cdrs(request):
         "clients": [] if is_client else Account.objects.filter(is_client=True)})
 
 
-@staff_required
+@require("voice", "money")
 def stats(request):
     qs, start, end = _filtered(request)
     by = request.GET.get("by", "supplier_client")
@@ -92,6 +95,7 @@ def stats(request):
         "date_range": f"{start.astimezone():%Y-%m-%d %H:%M} - {end.astimezone():%Y-%m-%d %H:%M}"})
 
 
+@machine_endpoint
 @csrf_exempt
 @require_POST
 def ingest_freeswitch(request):

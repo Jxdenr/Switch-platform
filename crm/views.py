@@ -10,7 +10,7 @@ from django.shortcuts import get_object_or_404, redirect, render
 from django.utils import timezone
 from django.views.decorators.http import require_POST
 
-from core.access import client_account, staff_required
+from core.access import client_account, portal_view, require
 from core.models import log
 from sms.views import _date_range
 from wholesale.models import ApiKey as WKey, BuyRate, SellRate, VendorBind as VBind
@@ -26,6 +26,14 @@ class AccountForm(forms.ModelForm):
         labels = {"is_supplier": "Supplier", "is_client": "Client", "account_manager": "Account manager",
                   "auto_statements": "Email monthly statement / invoice automatically"}
         widgets = {"notes": forms.Textarea(attrs={"rows": 3})}
+
+    def __init__(self, *a, **kw):
+        super().__init__(*a, **kw)
+        from django.contrib.auth import get_user_model
+        from core.tenancy import current_id
+        # Only this portal's own team can manage an account.
+        self.fields["account_manager"].queryset = get_user_model().objects.filter(
+            profile__tenant_id=current_id(), profile__role__in=["owner", "member"], is_active=True)
 
 
 # Every panel on the account page. kind -> (model, fields, singular label, group)
@@ -65,7 +73,7 @@ def panel_form(kind):
     return forms.modelform_factory(model, fields=fields, widgets=widgets)
 
 
-@staff_required
+@require("customers")
 def account_list(request, kind=None):
     if kind not in ("supplier", "client"):
         k = request.GET.get("kind")
@@ -89,7 +97,7 @@ def account_list(request, kind=None):
                                                      "nav": kind + "s"})
 
 
-@staff_required
+@require("customers")
 def account_edit(request, pk=None):
     obj = get_object_or_404(m.Account, pk=pk) if pk else None
     kind = request.GET.get("kind")
@@ -106,7 +114,7 @@ def account_edit(request, pk=None):
         "list_label": obj.list_label if obj else ("Clients" if kind == "client" else "Suppliers")})
 
 
-@staff_required
+@require("customers")
 def account_detail(request, pk):
     acc = get_object_or_404(m.Account, pk=pk)
     tab = request.GET.get("tab", "connections")
@@ -124,6 +132,9 @@ def account_detail(request, pk):
            "allocations": Allocation.objects.filter(client=acc, ends_at__isnull=True)
                           .select_related("number__billing_group__country")[:200],
            "users": acc.profile_set.select_related("user")}
+    from core.access import can
+    if tab == "statement" and not can(request.user, "money"):
+        raise PermissionDenied
     if tab == "statement":
         ctx.update(statement_context(request, acc))
         if request.GET.get("export") == "csv":
@@ -134,7 +145,7 @@ def account_detail(request, pk):
     return render(request, "crm/account_detail.html", ctx)
 
 
-@login_required
+@portal_view("money")
 def client_statements(request):
     """Client portal: the client's own volumes and monthly statements (what we owe them)."""
     acc = client_account(request.user)
@@ -180,7 +191,7 @@ def statement_context(request, acc):
             "recipients": st.recipients(acc), "sms_amount_label": "Due in" if side == st.SUPPLIER else "Due out"}
 
 
-@login_required
+@portal_view("money")
 def document_view(request, pk, kind, month):
     acc = get_object_or_404(m.Account, pk=pk)
     if kind not in dict(m.Document.KINDS):
@@ -201,7 +212,7 @@ def document_view(request, pk, kind, month):
     return render(request, "crm/document.html", st.document_context(acc, kind, first, last, doc))
 
 
-@staff_required
+@require("customers", "money")
 @require_POST
 def document_send(request, pk):
     acc = get_object_or_404(m.Account, pk=pk)
@@ -223,7 +234,7 @@ def document_send(request, pk):
     return redirect(f"/accounts/{acc.pk}/?tab=statement&side={st.side_for(kind)}")
 
 
-@staff_required
+@require("customers")
 def panel_edit(request, pk, kind, item=None):
     if kind not in PANELS:
         raise Http404
@@ -243,7 +254,7 @@ def panel_edit(request, pk, kind, item=None):
                                                    "kind": kind, "group": group, "nav": acc.nav_key})
 
 
-@staff_required
+@require("customers")
 @require_POST
 def panel_delete(request, pk, kind, item):
     if kind not in PANELS:
@@ -257,7 +268,7 @@ def panel_delete(request, pk, kind, item):
     return redirect(f"/accounts/{acc.pk}/?tab={group}")
 
 
-@staff_required
+@require("customers")
 def bind_status(request):
     return render(request, "crm/bind_status.html", {
         "smpp_users": m.SmppUser.objects.select_related("account").order_by("role", "account__title"),

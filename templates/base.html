@@ -3,13 +3,13 @@
 <head>
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width, initial-scale=1">
-<title>{% block title %}Switch{% endblock %} · Switch</title>
+<title>{% block title %}{{ brand }}{% endblock %} · {{ brand }}</title>
 {% load static %}<link rel="stylesheet" href="{% static 'css/app.css' %}">
 </head>
 <body>
 <div class="shell" data-layout="{{ ui_layout }}">
   <nav class="nav" aria-label="Main">
-    <a class="brand" href="/"><i>SW</i><span>Switch</span></a>
+    <a class="brand" href="{% if user.is_superuser %}/platform/{% else %}/{% endif %}"><i>{{ brand_initials|default:"SW" }}</i><span>{{ brand }}</span></a>
     <button type="button" class="btn sm navtoggle" aria-expanded="false" aria-controls="navgroups" onclick="const n=this.closest('.nav');n.classList.toggle('open');this.setAttribute('aria-expanded',n.classList.contains('open'))">Menu</button>
     {% for g in nav_groups %}<div class="navgroup"><b>{{ g.title }}</b>
       {% for i in g.items %}<a class="navlink{% if i.key == nav %} on{% endif %}" href="{{ i.url }}" title="{{ i.label }}">{{ i.icon }}<span>{{ i.label }}</span>{% if i.key == "binds" and binds_down %}<em class="navdot" title="{{ binds_down }} down"></em>{% endif %}</a>{% endfor %}
@@ -19,13 +19,14 @@
   </nav>
   <div class="main">
     <header class="topbar">
-      <form class="search" action="/numbers/" method="get" role="search">
+      {% if not user.is_superuser %}<form class="search" action="/numbers/" method="get" role="search">
         <svg width="14" height="14" viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="1.6" aria-hidden="true"><circle cx="7" cy="7" r="5"/><path d="m11 11 3.5 3.5"/></svg>
         <input type="search" name="q" id="globalsearch" placeholder="Find a number…" aria-label="Find a number" aria-keyshortcuts="Control+K Meta+K"><kbd class="kbd">Ctrl K</kbd>
-      </form>
-      {% if not is_client_user %}<a class="binds{% if binds_down %} down{% endif %}" href="/binds/">{% if binds_down %}<span class="dot" style="background:var(--bad)"></span>{{ binds_down }} bind{{ binds_down|pluralize }} down{% else %}<span class="dot" style="background:var(--ok)"></span>All binds up{% endif %}</a>{% endif %}
-      <details class="user"><summary><i>{{ user.username|slice:":2"|upper }}</i><span class="who">{{ user.username }}<small>{% if is_client_user %}Client{% elif user.is_superuser %}Administrator{% else %}Staff{% endif %}</small></span></summary>
+      </form>{% endif %}
+      {% if show_binds %}<a class="binds{% if binds_down %} down{% endif %}" href="/binds/">{% if binds_down %}<span class="dot" style="background:var(--bad)"></span>{{ binds_down }} bind{{ binds_down|pluralize }} down{% else %}<span class="dot" style="background:var(--ok)"></span>All binds up{% endif %}</a>{% endif %}
+      <details class="user"><summary><i>{{ user.first_name|default:user.username|slice:":2"|upper }}</i><span class="who">{{ user.get_full_name|default:user.email|default:user.username }}<small>{{ user_role }}</small></span></summary>
         <form class="pop" method="post" action="/ui/">{% csrf_token %}
+          <a class="btn" href="/account/security/">Password and two-factor</a>
           <input type="hidden" name="back" value="{{ request.get_full_path }}">
           <label for="ui-cw">Colourway</label>
           <select name="colourway" id="ui-cw">{% for v,l in ui_choices_cw %}{% endfor %}

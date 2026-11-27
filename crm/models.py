@@ -4,9 +4,11 @@ One Account can be a supplier, a client or both, as in the original CRM.
 """
 from django.db import models
 
+from core.tenancy import TenantOwned
 
-class Account(models.Model):
-    title = models.CharField(max_length=120, unique=True)
+
+class Account(TenantOwned):
+    title = models.CharField(max_length=120)
     is_supplier = models.BooleanField(default=False)
     is_client = models.BooleanField(default=False)
     tags = models.CharField(max_length=200, blank=True)
@@ -29,6 +31,7 @@ class Account(models.Model):
 
     class Meta:
         ordering = ["title"]
+        unique_together = [("tenant", "title")]
 
     def __str__(self):
         return self.title
@@ -52,7 +55,7 @@ class Account(models.Model):
         return "Supplier" if self.is_supplier else ("Client" if self.is_client else "Contact")
 
 
-class Address(models.Model):
+class Address(TenantOwned):
     account = models.ForeignKey(Account, on_delete=models.CASCADE, related_name="addresses")
     title = models.CharField(max_length=60, default="Head office")
     address1 = models.CharField(max_length=120)
@@ -65,7 +68,7 @@ class Address(models.Model):
         return f"{self.title}: {self.address1}"
 
 
-class Contact(models.Model):
+class Contact(TenantOwned):
     TITLES = [(t, t) for t in ["Mr", "Mrs", "Miss", "Ms", "Dr", "Prof"]]
     account = models.ForeignKey(Account, on_delete=models.CASCADE, related_name="contacts")
     title = models.CharField(max_length=5, choices=TITLES, blank=True)
@@ -81,7 +84,7 @@ class Contact(models.Model):
         return f"{self.first_name} {self.surname}".strip()
 
 
-class BankAccount(models.Model):
+class BankAccount(TenantOwned):
     account = models.ForeignKey(Account, on_delete=models.CASCADE, related_name="bank_accounts")
     title = models.CharField(max_length=60)
     bank_name = models.CharField(max_length=100, blank=True)
@@ -96,7 +99,7 @@ class BankAccount(models.Model):
         return self.title
 
 
-class SmppUser(models.Model):
+class SmppUser(TenantOwned):
     """Someone binds TO US over SMPP. We are the SMPP server.
 
     A supplier binds to send us SMS for our numbers (submit_sm). A client binds to receive
@@ -122,7 +125,7 @@ class SmppUser(models.Model):
         return f"{self.title} ({self.username})"
 
 
-class Smsc(models.Model):
+class Smsc(TenantOwned):
     """'SMSc': WE bind to the supplier's SMSC. We are the SMPP client."""
 
     account = models.ForeignKey(Account, on_delete=models.CASCADE, related_name="smscs")
@@ -152,7 +155,7 @@ class Smsc(models.Model):
         return f"smsc{self.pk}"
 
 
-class Prefix(models.Model):
+class Prefix(TenantOwned):
     account = models.ForeignKey(Account, on_delete=models.CASCADE, related_name="prefixes")
     prefix = models.CharField(max_length=20)
 
@@ -168,7 +171,7 @@ def _new_key():
     return secrets.token_urlsafe(24)
 
 
-class HttpUser(models.Model):
+class HttpUser(TenantOwned):
     """A supplier sends us SMS over HTTP instead of SMPP (the HTTP 'bind').
 
     They call /api/sms/inbound/ with this key and to, from and message."""
@@ -191,7 +194,7 @@ class HttpUser(models.Model):
         return not allowed or ip in allowed
 
 
-class HttpEndpoint(models.Model):
+class HttpEndpoint(TenantOwned):
     """'SMS HTTP': where we push inbound SMS for a client."""
 
     account = models.ForeignKey(Account, on_delete=models.CASCADE, related_name="http_endpoints")
@@ -208,7 +211,7 @@ class HttpEndpoint(models.Model):
         return self.title
 
 
-class Notification(models.Model):
+class Notification(TenantOwned):
     account = models.ForeignKey(Account, on_delete=models.CASCADE, related_name="notifications")
     url = models.URLField(max_length=400)
 
@@ -216,7 +219,7 @@ class Notification(models.Model):
         return self.url
 
 
-class OriginationIp(models.Model):
+class OriginationIp(TenantOwned):
     """Voice: IPs calls will come from."""
 
     account = models.ForeignKey(Account, on_delete=models.CASCADE, related_name="origination_ips")
@@ -228,7 +231,7 @@ class OriginationIp(models.Model):
         return f"{self.title} {self.ip}"
 
 
-class TerminationIp(models.Model):
+class TerminationIp(TenantOwned):
     """Voice: IPs we send calls to, in fail-over order."""
 
     account = models.ForeignKey(Account, on_delete=models.CASCADE, related_name="termination_ips")
@@ -243,7 +246,7 @@ class TerminationIp(models.Model):
         return f"{self.title} {self.ip}"
 
 
-class Document(models.Model):
+class Document(TenantOwned):
     """A monthly invoice (to a supplier, for traffic they sent us) or statement (to a client,
     for traffic we passed to them). Totals are frozen when the document is created."""
 

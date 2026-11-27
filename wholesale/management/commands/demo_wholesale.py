@@ -21,7 +21,17 @@ NETWORKS = [("EE", "234", "30", ["447700", "447701"]), ("O2", "234", "10", ["447
 class Command(BaseCommand):
     help = "Create example wholesale customers, vendors and traffic (demo only)."
 
+    def add_arguments(self, parser):
+        parser.add_argument("--portal", default="Demo Telecom", help="Portal to fill (created if missing).")
+
     def handle(self, *a, **o):
+        from core.models import Tenant
+        from core.tenancy import use_tenant
+        tenant, _ = Tenant.objects.get_or_create(name=o["portal"], defaults={"company_name": f'{o["portal"]} Ltd'})
+        with use_tenant(tenant):
+            self._fill()
+
+    def _fill(self):
         call_command("seed_lookups", verbosity=0)
         rnd = random.Random(11)
         uk = Country.objects.get(name="United Kingdom")

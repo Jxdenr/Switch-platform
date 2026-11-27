@@ -18,8 +18,22 @@ from sms.models import Message
 class Command(BaseCommand):
     help = "Create example suppliers, clients, numbers and SMS (for demos and development only)."
 
+    def add_arguments(self, parser):
+        parser.add_argument("--portal", default="Demo Telecom", help="Portal to fill (created if missing).")
+
     def handle(self, *args, **opts):
+        from core.models import Tenant
+        from core.tenancy import use_tenant
         call_command("seed_lookups")
+        tenant, _ = Tenant.objects.get_or_create(name=opts["portal"], defaults={
+            "company_name": f'{opts["portal"]} Ltd',
+            "company_details": "1 Example Street, London\nBank: Example Bank · 00-00-00 · 00000000"})
+        with use_tenant(tenant):
+            self._fill()
+        self.stdout.write(f"Demo data is in the portal \"{tenant}\". Give it an owner from the Platform page, "
+                          f"or: manage.py create_portal \"{tenant}\" you@example.com")
+
+    def _fill(self):
         rnd = random.Random(7)
         gbp, uk = Currency.objects.get(code="GBP"), Country.objects.get(name="United Kingdom")
         t3045, all_times = PaymentTerms.objects.get(title="30/45"), TimeOfDay.objects.get(title="All Times")

@@ -14,6 +14,7 @@ from django.core.management import call_command
 from django.test import TestCase, TransactionTestCase, override_settings
 from django.utils import timezone
 
+from tests.base import PortalMixin, make_login
 from core.models import Country
 from crm.models import Account, SmppUser
 from sms.models import BlockRule
@@ -44,7 +45,7 @@ def fields(dest="447700900123", src="MyBank", body="Your code is 1234", **kw):
     return dict(source=src, destination=dest, payload=body.encode(), body=body, registered_delivery=1, **kw)
 
 
-class AcceptTests(TestCase):
+class AcceptTests(PortalMixin, TestCase):
     def setUp(self):
         world(self)
 
@@ -92,7 +93,7 @@ class AcceptTests(TestCase):
         self.assertEqual(engine.accept(self.cust_acc, fields()).status, engine.ROK)
 
 
-class RoutingTests(TestCase):
+class RoutingTests(PortalMixin, TestCase):
     def setUp(self):
         world(self)
 
@@ -135,7 +136,7 @@ class RoutingTests(TestCase):
         self.assertEqual(self.cust.balance, Decimal("10"))
 
 
-class ReceiptTests(TestCase):
+class ReceiptTests(PortalMixin, TestCase):
     def setUp(self):
         world(self)
         self.m = engine.accept(self.cust_acc, fields()).message
@@ -179,7 +180,7 @@ class ReceiptTests(TestCase):
         self.assertEqual((esm, back["id"], back["stat"]), (4, "ourid", "DELIVRD"))
 
 
-class TestBindTests(TestCase):
+class TestBindTests(PortalMixin, TestCase):
     def setUp(self):
         world(self)
 
@@ -254,7 +255,7 @@ class FakeVendor:
 
 
 @override_settings(WHOLESALE_MAX_VENDOR_ATTEMPTS=4)
-class EndToEndTests(TransactionTestCase):
+class EndToEndTests(PortalMixin, TransactionTestCase):
     def setUp(self):
         world(self)
         self.su = SmppUser.objects.create(account=self.cust_acc, title="buyer", username="buyer", password="pw",
@@ -336,11 +337,11 @@ class EndToEndTests(TransactionTestCase):
         c.disconnect()
 
 
-class PageTests(TestCase):
+class PageTests(PortalMixin, TestCase):
     def setUp(self):
         world(self)
         from django.contrib.auth.models import User
-        self.client.force_login(User.objects.create_superuser("boss", "b@example.com", "pw-long-enough"))
+        self.client.force_login(make_login("boss", self.tenant))
 
     def test_pages_render(self):
         m = engine.accept(self.cust_acc, fields()).message
@@ -375,7 +376,7 @@ class PageTests(TestCase):
         self.assertEqual(plan.entries.count(), 1)
 
 
-class SettingsAddedTests(TestCase):
+class SettingsAddedTests(PortalMixin, TestCase):
     """Split-by-percentage routing, the daily cap, duplicate refusal and the delivery warning."""
 
     def setUp(self):
@@ -414,7 +415,7 @@ class SettingsAddedTests(TestCase):
 
     def test_overview_flags_low_delivery(self):
         from django.contrib.auth.models import User
-        self.client.force_login(User.objects.create_superuser("boss", "b@example.com", "pw-long-enough"))
+        self.client.force_login(make_login("boss", self.tenant))
         Customer.objects.filter(pk=self.cust.pk).update(delivery_alert_pct=90)
         now = timezone.now()
         for i in range(60):
@@ -424,13 +425,13 @@ class SettingsAddedTests(TestCase):
         self.assertContains(r, "Delivery low")
 
 
-class HelpTests(TestCase):
+class HelpTests(PortalMixin, TestCase):
     """Every page carries its key; empty pages offer the next step; the setup checklist ticks itself."""
 
     def setUp(self):
         call_command("seed_lookups", verbosity=0)
         from django.contrib.auth.models import User
-        self.client.force_login(User.objects.create_superuser("boss", "b@example.com", "pw-long-enough"))
+        self.client.force_login(make_login("boss", self.tenant))
 
     def test_pages_have_help_and_empty_prompts(self):
         for url in ["/", "/suppliers/", "/clients/", "/binds/", "/billing-groups/", "/numbers/", "/numbers/add/",

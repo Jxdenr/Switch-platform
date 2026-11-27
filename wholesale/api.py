@@ -14,8 +14,9 @@ from django.utils import timezone
 from django.views.decorators.csrf import csrf_exempt
 from django.views.decorators.http import require_POST
 
+from core.access import machine_endpoint
+from core.security import client_ip as _client_ip
 from sms.smpp_server import GSM_SAFE
-from sms.views import _client_ip
 from . import engine
 from .models import ApiKey
 
@@ -50,6 +51,7 @@ def split(text):
 ERRORS = {engine.RINVDSTADR: 400, engine.RINVSRCADR: 400, engine.RSUBMITFAIL: 422}
 
 
+@machine_endpoint
 @csrf_exempt
 @require_POST
 def send(request):

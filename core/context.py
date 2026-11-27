@@ -4,9 +4,12 @@ from django.conf import settings
 def ui(request):
     """Colourway and layout for the shell; stored per user, overridable by cookie."""
     cw, layout = "harbour", "sidebar"
+    tenant = getattr(request, "tenant", None)
+    if tenant and tenant.colourway:
+        cw = tenant.colourway
     user = getattr(request, "user", None)
     if user and user.is_authenticated and hasattr(user, "profile"):
-        cw, layout = user.profile.colourway, user.profile.layout
+        cw, layout = user.profile.colourway or cw, user.profile.layout
     return {
         "ui_colourway": request.COOKIES.get("cw", cw),
         "ui_layout": request.COOKIES.get("layout", layout),
@@ -30,49 +33,83 @@ ICONS = {
     "set": '<circle cx="8" cy="8" r="2.2"/><path d="M8 1.5v2M8 12.5v2M1.5 8h2M12.5 8h2M3.4 3.4l1.4 1.4M11.2 11.2l1.4 1.4M3.4 12.6l1.4-1.4M11.2 4.8l1.4-1.4"/>',
 }
 
+# (key, label, url, icon, who). who: a section key (team members need it; owners see all),
+# "team" (any team member), "client" (client portal only), "all" (team and clients),
+# "owner" (portal owners), or a tuple "section+client" written as ("sms", "client").
 NAV = [
-    ("Overview", [("dashboard", "Dashboard", "/", "home", False),
+    ("Overview", [("dashboard", "Dashboard", "/", "home", "all"),
                   ("statements", "Statements", "/statements/", "doc", "client")]),
-    ("Customers", [("suppliers", "Suppliers", "/suppliers/", "acc", True),
-                   ("clients", "Clients", "/clients/", "acc", True),
-                   ("binds", "Bind status", "/binds/", "bind", True)]),
-    ("Numbers", [("groups", "Billing groups", "/billing-groups/", "grp", True),
-                 ("numbers", "Numbers", "/numbers/", "num", False),
-                 ("addnumbers", "Add numbers", "/numbers/add/", "add", True)]),
-    ("SMS", [("records", "SMS records", "/sms/records/", "msg", False),
-             ("ticker", "Live ticker", "/sms/ticker/", "live", False),
-             ("stats", "SMS stats", "/sms/stats/", "stat", True),
-             ("blocking", "Blocking rules", "/sms/blocking/", "block", True)]),
-    ("Outbound SMS", [("ws_overview", "Overview", "/wholesale/", "home", True),
-                   ("ws_messages", "Messages", "/wholesale/messages/", "msg", True),
-                   ("ws_quality", "Vendor quality", "/wholesale/quality/", "stat", True),
-                   ("ws_routes", "Route plans", "/wholesale/routes/", "grp", True),
-                   ("ws_networks", "Networks", "/wholesale/networks/", "num", True)]),
-    ("Voice", [("cdrs", "Call records", "/voice/cdrs/", "phone", False),
-               ("voicestats", "Voice stats", "/voice/stats/", "stat", True)]),
-    ("Admin", [("admin", "Users & settings", "/admin/", "set", True)]),
+    ("Customers", [("suppliers", "Suppliers", "/suppliers/", "acc", "customers"),
+                   ("clients", "Clients", "/clients/", "acc", "customers"),
+                   ("binds", "Bind status", "/binds/", "bind", "customers")]),
+    ("Numbers", [("groups", "Billing groups", "/billing-groups/", "grp", "numbers"),
+                 ("numbers", "Numbers", "/numbers/", "num", ("numbers", "client")),
+                 ("addnumbers", "Add numbers", "/numbers/add/", "add", "numbers")]),
+    ("SMS", [("records", "SMS records", "/sms/records/", "msg", ("sms", "client")),
+             ("ticker", "Live ticker", "/sms/ticker/", "live", ("sms", "client")),
+             ("stats", "SMS stats", "/sms/stats/", "stat", ("sms", "money")),
+             ("blocking", "Blocking rules", "/sms/blocking/", "block", "sms")]),
+    ("Outbound SMS", [("ws_overview", "Overview", "/wholesale/", "home", "wholesale"),
+                   ("ws_messages", "Messages", "/wholesale/messages/", "msg", "wholesale"),
+                   ("ws_quality", "Vendor quality", "/wholesale/quality/", "stat", "wholesale"),
+                   ("ws_routes", "Route plans", "/wholesale/routes/", "grp", "wholesale"),
+                   ("ws_networks", "Networks", "/wholesale/networks/", "num", "wholesale")]),
+    ("Voice", [("cdrs", "Call records", "/voice/cdrs/", "phone", ("voice", "client")),
+               ("voicestats", "Voice stats", "/voice/stats/", "stat", ("voice", "money"))]),
+    ("Portal", [("team", "Logins", "/team/", "acc", "owner"),
+                ("portal_settings", "Settings", "/settings/", "set", "owner")]),
 ]
+PLATFORM_NAV = [("Platform", [("platform", "Portals", "/platform/", "home", "platform")])]
+
+
+def _visible(who, user, is_client):
+    from .access import can, is_owner
+    if who == "platform":
+        return user.is_superuser
+    if user.is_superuser:
+        return False
+    if who == "all":
+        return True
+    if who == "client":
+        return is_client
+    if who == "owner":
+        return is_owner(user)
+    if who == "team":
+        return can(user)
+    parts = who if isinstance(who, tuple) else (who,)
+    if "client" in parts and is_client:
+        return True
+    return all(can(user, s) for s in parts if s != "client")
 
 
 def nav(request):
     from django.utils.safestring import mark_safe
-    from .access import client_account
+    from .access import can, client_account
     user = getattr(request, "user", None)
-    is_client = bool(user and user.is_authenticated and client_account(user))
+    if not (user and user.is_authenticated):
+        return {"nav_groups": [], "binds_down": 0, "is_client_user": False}
+    is_client = bool(client_account(user))
     groups = []
-    for title, items in NAV:
+    for title, items in (PLATFORM_NAV if user.is_superuser else NAV):
         visible = [{"key": k, "label": lbl, "url": url,
                     "icon": mark_safe(f'<svg viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="1.5" '
                                       f'stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">{ICONS[ic]}</svg>')}
-                   for k, lbl, url, ic, who in items
-                   if (who == "client" and is_client) or (who is False) or (who is True and not is_client)]
+                   for k, lbl, url, ic, who in items if _visible(who, user, is_client)
+                   and (k != "addnumbers" or can(user, "numbers", edit=True))]
         if visible:
             groups.append({"title": title, "items": visible})
     binds_down = 0
-    if user and user.is_authenticated and not is_client:
+    if can(user, "customers"):
         from crm.models import SmppUser, Smsc
         from wholesale.models import VendorBind
         binds_down = (SmppUser.objects.filter(enabled=True, bound=False).count()
                       + Smsc.objects.filter(enabled=True, bound=False).count()
                       + VendorBind.objects.filter(enabled=True, bound=False).count())
-    return {"nav_groups": groups, "binds_down": binds_down, "is_client_user": is_client}
+    tenant = getattr(request, "tenant", None)
+    brand = tenant.name if tenant else "Switch platform"
+    return {"nav_groups": groups, "binds_down": binds_down, "is_client_user": is_client,
+            "show_binds": can(user, "customers"), "can_money": is_client or can(user, "money"),
+            "can_change": not is_client and can(user, edit=True),
+            "portal": tenant, "brand": brand, "brand_initials": "".join(w[0] for w in brand.split()[:2]).upper(),
+            "user_role": ("Platform admin" if user.is_superuser else
+                          {"owner": "Owner", "member": "Team", "client": "Client"}.get(user.profile.role, ""))}

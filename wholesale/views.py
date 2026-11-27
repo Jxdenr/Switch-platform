@@ -13,7 +13,7 @@ from django.http import HttpResponse
 from django.shortcuts import get_object_or_404, redirect, render
 from django.utils import timezone
 
-from core.access import staff_required
+from core.access import portal_view, require
 from core.models import Country, log
 from crm.models import Account, SmppUser
 from sms.views import _date_range
@@ -38,7 +38,7 @@ def totals(qs):
     return t
 
 
-@staff_required
+@require("wholesale")
 def overview(request):
     since = timezone.now() - timedelta(hours=24)
     live = M.objects.filter(created_at__gte=since, test=False)
@@ -75,7 +75,7 @@ def overview(request):
 MSG_FILTERS = [("customer", "customer_id"), ("vendor", "vendor_id"), ("status", "status"), ("stat", "stat")]
 
 
-@staff_required
+@require("wholesale")
 def message_list(request):
     f = request.GET
     start, end = _date_range(f)
@@ -109,7 +109,7 @@ def message_list(request):
         "vendors": Account.objects.filter(wholesale_vendor__isnull=False), "statuses": M.STATUSES, "f": f})
 
 
-@staff_required
+@require("wholesale")
 def quality(request):
     days = int(request.GET.get("days") or 7) if (request.GET.get("days") or "7").isdigit() else 7
     return render(request, "wholesale/quality.html", {"nav": "ws_quality", "rows": vendor_quality(days), "days": days})
@@ -139,7 +139,7 @@ class EntryForm(forms.ModelForm):
         self.fields["vendor"].empty_label = "Choose a vendor"
 
 
-@staff_required
+@require("wholesale")
 def routes(request):
     plan_form = PlanForm(request.POST if request.POST.get("form") == "plan" else None)
     if request.method == "POST":
@@ -181,7 +181,7 @@ def find_country(v):
             or Country.objects.filter(dial_code=v.lstrip("+")).first() if v else None)
 
 
-@staff_required
+@require("wholesale")
 def networks(request):
     if request.method == "POST" and request.FILES.get("csv"):
         added, errors = import_networks(request.FILES["csv"].read().decode("utf-8-sig", "replace"))
@@ -249,7 +249,7 @@ class TopUpForm(forms.Form):
     note = forms.CharField(max_length=200, required=False)
 
 
-@staff_required
+@require("wholesale")
 def account(request, pk):
     acc = get_object_or_404(Account, pk=pk)
     cust = Customer.objects.filter(account=acc).first()
@@ -345,7 +345,7 @@ class SmppSettingsForm(forms.ModelForm):
         fields = ["tps", "test_mode", "test_delivered_pct", "test_price"]
 
 
-@staff_required
+@require("wholesale")
 def smpp_settings(request, pk):
     su = get_object_or_404(SmppUser, pk=pk, role=SmppUser.WHOLESALE)
     obj, _ = SmppTestSettings.objects.get_or_create(smpp_user=su)

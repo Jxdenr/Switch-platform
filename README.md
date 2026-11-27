@@ -22,22 +22,55 @@ an open-source SMS gateway; this app configures Jasmin and receives every inboun
 python3 -m venv .venv && . .venv/bin/activate
 pip install -r requirements.txt
 python manage.py migrate
-python manage.py demo_data          # fake suppliers, clients, 900 numbers, 1,500 SMS
-python manage.py createsuperuser
+python manage.py demo_data          # a "Demo Telecom" portal with fake suppliers, clients, numbers, SMS
+python manage.py create_portal "Demo Telecom" you@example.com --site http://127.0.0.1:8000
 python manage.py runserver
 ```
 
-Open http://127.0.0.1:8000 and sign in. Run the tests with `python manage.py test tests`.
+Open the printed link to choose a password, then sign in. Run the tests with `python manage.py test tests`.
 
 ## Run it on a server
 
 1. A Linux VPS with Docker and a fixed public IP. Point a domain at it.
 2. `cp .env.example .env` and change every value marked CHANGE.
 3. `docker compose up -d --build`
-4. `docker compose exec web python manage.py createsuperuser`
-5. Put a TLS proxy (Caddy is simplest) in front of port 8000.
-6. Open port 2775 to your suppliers' IPs only, for their SMPP binds.
-7. After adding binds in the CRM: `docker compose exec web python manage.py sync_jasmin`.
+4. Create the platform admin (only manages portals, must use an authenticator app):
+   `docker compose exec web python manage.py createsuperuser`
+5. Create your own portal and its owner login, and open the printed link to set the password:
+   `docker compose exec web python manage.py create_portal "Your Company" you@example.com --site https://switch.example.com`
+6. Put a TLS proxy (Caddy is simplest) in front of port 8000. Keep `TRUST_PROXY=1` behind it.
+7. Open port 2775 to your suppliers' IPs only, for their SMPP binds.
+8. After adding binds in the CRM: `docker compose exec web python manage.py sync_jasmin`.
+
+## Portals and logins
+
+One switch serves several separate businesses (**portals**). Each portal has its own suppliers,
+clients, numbers, traffic, statements, company and bank details, and logins, and can't see any
+other portal. Your own business is a portal like any other.
+
+| Login | Can do |
+| --- | --- |
+| Platform admin (`createsuperuser`) | Create, rename, brand and suspend portals; invite or reset their owners. Sees no portal's data. Two-factor required. |
+| Portal owner | Everything in their portal, including its logins and its company/bank details (Settings). |
+| Team member | Only the areas the owner ticks (Customers, Numbers, SMS, Voice, Wholesale, Money), view-only unless allowed to make changes. |
+| Client portal | One client account's own numbers, SMS, calls and statements. Never sees suppliers or buy rates. |
+
+How isolation works (`core/tenancy.py`): every business table has a non-null `tenant` column, and
+its default manager adds `tenant = <current portal>` when the query runs. A web request opens
+exactly one portal (from the signed-in user); with none open, any query raises instead of returning
+data. Saving a record into another portal, or pointing it at another portal's record, raises too.
+Workers and management commands run across portals and narrow to one per message. New business
+models must subclass `TenantOwned`. `tests/test_portals.py` checks that every URL needs a login and
+that one portal can't read or write another's data.
+
+Security: Argon2 password hashing, lockout after 5 failed sign-ins per email and IP (30 per IP),
+optional authenticator-app two-factor for every login (required for platform admins, and for
+owners too with `REQUIRE_2FA_ROLES=owner`), invite links instead of emailed passwords, 12-hour
+sessions, secure cookies and HSTS when `DEBUG=0`. SMPP and HTTP bind credentials are separate
+from web logins and never work as one.
+
+Shared across all portals: SMPP bind usernames (one SMPP port), phone numbers (one route per
+number), countries, currencies, payment terms and networks.
 
 ## Status
 

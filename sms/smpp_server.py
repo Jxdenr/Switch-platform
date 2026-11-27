@@ -15,6 +15,7 @@ Run with `manage.py smpp_server`. Bind status shown in the app is kept up to dat
 Known limits (v1): long messages split in parts (UDH) are stored one record per part, and we
 do not send delivery receipts back to suppliers yet.
 """
+import hmac
 import asyncio
 import logging
 import string
@@ -122,7 +123,7 @@ def authenticate(system_id, password, ip):
     u = SmppUser.objects.select_related("account").filter(username=system_id).first()
     if not u or not u.enabled:
         return None, RINVSYSID
-    if u.password != password:
+    if not hmac.compare_digest(u.password.encode(), (password or "").encode()):
         return None, RINVPASWD
     allowed = [x.strip() for x in u.ip.split(",") if x.strip()]
     if allowed and ip not in allowed:

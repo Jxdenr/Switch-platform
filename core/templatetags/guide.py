@@ -10,7 +10,15 @@ register = template.Library()
 @register.inclusion_tag("partials/page_help.html", takes_context=True)
 def page_help(context, key=None):
     key = key or context.get("nav")
-    return {"key": key, "p": h.page(key, context.get("is_client_user"))}
+    p = h.page(key, context.get("is_client_user"))
+    if p and not context.get("can_money", True):
+        # Team members without Money don't see money figures, so don't explain them either.
+        p = {**p, "key": [(k, v) for k, v in p.get("key", []) if k not in MONEY_TERMS]}
+    return {"key": key, "p": p}
+
+
+MONEY_TERMS = {"Due in", "Due out", "Margin", "Earned", "Rate in", "Rate out", "Balance", "Credit limit",
+               "Sell rate", "Buy rate", "Price", "Charged"}
 
 
 @register.simple_tag

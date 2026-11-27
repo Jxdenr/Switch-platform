@@ -14,6 +14,7 @@ from django.db.models import Count, F, Q
 from django.utils import timezone
 
 from core.models import Country
+from core.tenancy import use_tenant
 from inventory.services import normalise
 from sms.models import BlockRule
 from . import pdu
@@ -173,6 +174,12 @@ def check_rules(customer_account, source, destination, body, at):
 
 
 def accept(account, fields, smpp_user=None, api_key=None):
+    """Everything about one message happens inside the customer's own portal."""
+    with use_tenant(account.tenant_id):
+        return _accept(account, fields, smpp_user, api_key)
+
+
+def _accept(account, fields, smpp_user=None, api_key=None):
     """Check a customer's message and either queue it (charging the customer) or refuse it.
 
     Refused messages are recorded too, with the reason, so customers' support questions can be
