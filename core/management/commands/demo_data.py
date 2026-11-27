@@ -68,7 +68,7 @@ class Command(BaseCommand):
         self._documents()
         self._extras(rnd, suppliers, clients, t3045, all_times)
         self._rules(suppliers, clients)
-        if Message.objects.filter(currency="GBP").exists():
+        if Message.objects.filter(body__startswith="Example message").exists():
             self.stdout.write("Messages already present, skipping.")
             return
         from sms.routing import receive
