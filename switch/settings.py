@@ -24,6 +24,7 @@ INSTALLED_APPS = [
     "inventory",
     "sms",
     "voice",
+    "wholesale",
 ]
 
 MIDDLEWARE = [
@@ -115,3 +116,15 @@ DEFAULT_FROM_EMAIL = os.environ.get("DEFAULT_FROM_EMAIL", "billing@example.com")
 # Built-in SMPP server: suppliers bind to send us SMS, clients bind to receive theirs.
 SMPP_SERVER_HOST = os.environ.get("SMPP_SERVER_HOST", "0.0.0.0")
 SMPP_SERVER_PORT = int(os.environ.get("SMPP_SERVER_PORT", "2775"))
+
+# Wholesale SMS (customers send us traffic, we route it to vendors). All wholesale rates and
+# balances are in this one currency.
+WHOLESALE_CURRENCY = os.environ.get("WHOLESALE_CURRENCY", DEFAULT_CURRENCY)
+# A message with a vendor and no receipt after this long is marked UNKNOWN ("no receipt from route").
+WHOLESALE_DLR_TIMEOUT_HOURS = int(os.environ.get("WHOLESALE_DLR_TIMEOUT_HOURS", "72"))
+# A queued message no vendor could take within this many seconds is rejected (and refunded).
+WHOLESALE_QUEUE_TIMEOUT = int(os.environ.get("WHOLESALE_QUEUE_TIMEOUT", "600"))
+WHOLESALE_MAX_VENDOR_ATTEMPTS = int(os.environ.get("WHOLESALE_MAX_VENDOR_ATTEMPTS", "4"))
+WHOLESALE_DLR_MAX_ATTEMPTS = int(os.environ.get("WHOLESALE_DLR_MAX_ATTEMPTS", "8"))
+# Message text is personal data: wholesale message text is cleared after this many days (metadata stays).
+WHOLESALE_BODY_RETENTION_DAYS = int(os.environ.get("WHOLESALE_BODY_RETENTION_DAYS", "30"))

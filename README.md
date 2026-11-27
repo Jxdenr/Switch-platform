@@ -105,3 +105,10 @@ in the period (labelled, e.g. GBP), lists any others underneath, and the chart a
 currency. `DEFAULT_CURRENCY` (default GBP) is used when there is no traffic. "Delivered" is the share of routed
 SMS that reached the client; "Unrouted" counts SMS and calls to numbers with no client (blocked SMS are listed
 separately).
+
+## Wholesale SMS
+
+Customers bind to the SMPP server (role "Wholesale customer") or use `POST /api/wholesale/send/`; the
+`router` service (`manage.py wholesale_router`, run exactly one) binds out to vendors, sends with failover
+and passes the vendors' real receipts back. Rules are in `docs/platform-knowledge.md` (Wholesale section).
+`manage.py demo_wholesale` adds fake example customers, vendors and a week of traffic.

@@ -34,6 +34,14 @@ services:
     depends_on: [db, web]
     restart: unless-stopped
 
+  router:
+    build: .
+    env_file: .env
+    # Wholesale: binds out to vendors, sends customers' traffic, takes in receipts. Run one copy only.
+    command: python manage.py wholesale_router
+    depends_on: [db, web]
+    restart: unless-stopped
+
   statements:
     build: .
     env_file: .env

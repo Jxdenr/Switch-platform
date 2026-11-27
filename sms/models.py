@@ -68,14 +68,15 @@ class BlockRule(models.Model):
     billing group. Most rules block (number, prefix, sender ID); a limit rule caps how many SMS
     one destination number may receive per hour, which catches SMS pumping early."""
 
-    NUMBER, PREFIX, SENDER, LIMIT = "number", "prefix", "sender", "limit"
+    NUMBER, PREFIX, SENDER, LIMIT, CONTENT = "number", "prefix", "sender", "limit", "content"
     TYPES = [(SENDER, "Block a sender ID"), (PREFIX, "Block a number prefix"), (NUMBER, "Block one number"),
-             (LIMIT, "Limit SMS per number per hour")]
-    ALL, SUPPLIER, CLIENT, GROUP = "all", "supplier", "client", "group"
-    SCOPES = [(ALL, "Everyone"), (SUPPLIER, "A supplier"), (CLIENT, "A client"), (GROUP, "A billing group")]
+             (LIMIT, "Limit SMS per number per hour"), (CONTENT, "Block text containing")]
+    ALL, SUPPLIER, CLIENT, GROUP, CUSTOMER = "all", "supplier", "client", "group", "customer"
+    SCOPES = [(ALL, "Everyone"), (SUPPLIER, "A supplier"), (CLIENT, "A client"), (GROUP, "A billing group"),
+              (CUSTOMER, "A wholesale customer")]
 
     rule_type = models.CharField(max_length=7, choices=TYPES)
-    value = models.CharField(max_length=40)
+    value = models.CharField(max_length=80)
     scope = models.CharField("Applies to", max_length=8, choices=SCOPES, default=ALL)
     account = models.ForeignKey("crm.Account", null=True, blank=True, on_delete=models.CASCADE,
                                 help_text="The supplier or client this rule applies to")
@@ -96,7 +97,7 @@ class BlockRule(models.Model):
     def target(self):
         if self.scope == self.GROUP:
             return self.billing_group
-        if self.scope in (self.SUPPLIER, self.CLIENT):
+        if self.scope in (self.SUPPLIER, self.CLIENT, self.CUSTOMER):
             return self.account
         return None
 
@@ -105,8 +106,10 @@ class BlockRule(models.Model):
         return f"{self.get_scope_display()[2:].capitalize()}: {t}" if t else "Everyone"
 
     @classmethod
-    def applying(cls, supplier=None, client=None, billing_group=None):
+    def applying(cls, supplier=None, client=None, billing_group=None, customer=None):
         q = models.Q(scope=cls.ALL)
+        if customer:
+            q |= models.Q(scope=cls.CUSTOMER, account=customer)
         if supplier:
             q |= models.Q(scope=cls.SUPPLIER, account=supplier)
         if client:
@@ -115,14 +118,22 @@ class BlockRule(models.Model):
             q |= models.Q(scope=cls.GROUP, billing_group=billing_group)
         return cls.objects.filter(q)
 
+    def matches(self, source, destination, body=""):
+        """Number, prefix, sender and content rules. Limit rules are counted by the caller."""
+        if self.rule_type == self.NUMBER:
+            return destination == self.value
+        if self.rule_type == self.PREFIX:
+            return destination.startswith(self.value)
+        if self.rule_type == self.SENDER:
+            return source.lower() == self.value.lower()
+        if self.rule_type == self.CONTENT:
+            return bool(self.value) and self.value.lower() in (body or "").lower()
+        return False
+
     @classmethod
-    def blocks(cls, source, destination, client=None, supplier=None, billing_group=None, at=None):
+    def blocks(cls, source, destination, client=None, supplier=None, billing_group=None, at=None, body=""):
         for r in cls.applying(supplier, client, billing_group):
-            if r.rule_type == cls.NUMBER and destination == r.value:
-                return r
-            if r.rule_type == cls.PREFIX and destination.startswith(r.value):
-                return r
-            if r.rule_type == cls.SENDER and source.lower() == r.value.lower():
+            if r.matches(source, destination, body):
                 return r
             if r.rule_type == cls.LIMIT and r.value.isdigit():
                 from datetime import timedelta

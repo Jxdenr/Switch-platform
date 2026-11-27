@@ -148,10 +148,12 @@ def resend(request, pk):
 class BlockRuleForm(forms.ModelForm):
     supplier = forms.ModelChoiceField(Account.objects.filter(is_supplier=True), required=False, empty_label="Choose supplier")
     client = forms.ModelChoiceField(Account.objects.filter(is_client=True), required=False, empty_label="Choose client")
+    customer = forms.ModelChoiceField(Account.objects.filter(wholesale_customer__isnull=False), required=False,
+                                      empty_label="Choose wholesale customer")
 
     class Meta:
         model = BlockRule
-        fields = ["scope", "supplier", "client", "billing_group", "rule_type", "value", "reason"]
+        fields = ["scope", "supplier", "client", "customer", "billing_group", "rule_type", "value", "reason"]
         widgets = {"scope": forms.RadioSelect}
         labels = {"rule_type": "Rule", "reason": "Reason (optional)"}
 
@@ -164,7 +166,8 @@ class BlockRuleForm(forms.ModelForm):
     def clean(self):
         d = super().clean()
         scope, kind, value = d.get("scope"), d.get("rule_type"), (d.get("value") or "").strip()
-        need = {BlockRule.SUPPLIER: "supplier", BlockRule.CLIENT: "client", BlockRule.GROUP: "billing_group"}.get(scope)
+        need = {BlockRule.SUPPLIER: "supplier", BlockRule.CLIENT: "client", BlockRule.GROUP: "billing_group",
+                BlockRule.CUSTOMER: "customer"}.get(scope)
         if need and not d.get(need):
             self.add_error(need, "Choose which one this rule applies to.")
         if kind == BlockRule.LIMIT and not value.isdigit():
@@ -179,7 +182,8 @@ class BlockRuleForm(forms.ModelForm):
     def save(self, commit=True):
         r = super().save(commit=False)
         d = self.cleaned_data
-        r.account = d.get("supplier") if r.scope == BlockRule.SUPPLIER else d.get("client") if r.scope == BlockRule.CLIENT else None
+        r.account = {BlockRule.SUPPLIER: d.get("supplier"), BlockRule.CLIENT: d.get("client"),
+                     BlockRule.CUSTOMER: d.get("customer")}.get(r.scope)
         if r.scope != BlockRule.GROUP:
             r.billing_group = None
         if commit:

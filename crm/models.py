@@ -102,11 +102,12 @@ class SmppUser(models.Model):
     A supplier binds to send us SMS for our numbers (submit_sm). A client binds to receive
     the SMS for their allocated numbers (we send them deliver_sm)."""
 
-    SUPPLIER, CLIENT = "supplier", "client"
-    ROLES = [(SUPPLIER, "Supplier sends SMS to us"), (CLIENT, "Client receives SMS from us")]
+    SUPPLIER, CLIENT, WHOLESALE = "supplier", "client", "wholesale"
+    ROLES = [(SUPPLIER, "Supplier sends SMS to us"), (CLIENT, "Client receives SMS from us"),
+             (WHOLESALE, "Wholesale customer sends traffic and gets receipts")]
 
     account = models.ForeignKey(Account, on_delete=models.CASCADE, related_name="smpp_users")
-    role = models.CharField(max_length=8, choices=ROLES, default=SUPPLIER)
+    role = models.CharField(max_length=9, choices=ROLES, default=SUPPLIER)
     title = models.CharField(max_length=80)
     ip = models.CharField(max_length=200, blank=True, help_text="Allowed source IPs, comma separated. Blank = any.")
     username = models.CharField(max_length=16, unique=True, help_text="SMPP system_id the supplier binds with")

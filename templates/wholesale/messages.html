@@ -1,0 +1,26 @@
+{% extends "base.html" %}{% load switch humanize %}
+{% block title %}Wholesale messages{% endblock %}
+{% block content %}
+<div class="pagehead"><div><h1>Wholesale messages</h1><div class="sub">{{ t.n|intcomma }} messages · {% if t.delivered_pct is not None %}{{ t.delivered_pct }}% delivered{% else %}no final statuses yet{% endif %} · charged {{ t.revenue|money }} {{ currency }}, vendor cost {{ t.cost|money }}</div></div>
+<div class="actions"><a class="btn" href="?{% qs_without 'page' %}&export=csv">Export CSV</a></div></div>
+<form class="filters" method="get">
+  <label>Date range<input type="text" name="date_range" value="{{ date_range }}" size="34" class="mono"></label>
+  <label>Customer<select name="customer"><option value="">All</option>{% for a in customers %}<option value="{{ a.pk }}" {% if f.customer == a.pk|stringformat:"s" %}selected{% endif %}>{{ a }}</option>{% endfor %}</select></label>
+  <label>Vendor<select name="vendor"><option value="">All</option>{% for a in vendors %}<option value="{{ a.pk }}" {% if f.vendor == a.pk|stringformat:"s" %}selected{% endif %}>{{ a }}</option>{% endfor %}</select></label>
+  <label>Status<select name="status"><option value="">All</option>{% for k, l in statuses %}<option value="{{ k }}" {% if f.status == k %}selected{% endif %}>{{ l }}</option>{% endfor %}</select></label>
+  <label>Traffic<select name="test"><option value="">Live and test</option><option value="0" {% if f.test == "0" %}selected{% endif %}>Live only</option><option value="1" {% if f.test == "1" %}selected{% endif %}>Test only</option></select></label>
+  <label>To<input type="text" name="destination" value="{{ f.destination|default:'' }}" size="14"></label>
+  <label>Message ID<input type="text" name="id" value="{{ f.id|default:'' }}" size="18" placeholder="Ours or vendor's"></label>
+  <button class="btn primary">Show</button>
+</form>
+<div class="tablewrap"><table><thead><tr><th>Date</th><th>Customer</th><th>From</th><th>To</th><th>Network</th><th>Vendor</th><th>Status</th><th>Receipt</th><th class="num">Charged</th><th>Text</th></tr></thead><tbody>
+{% for m in page %}<tr><td class="mono muted" title="Our ID {{ m.message_id }}{% if m.vendor_message_id %} · vendor ID {{ m.vendor_message_id }}{% endif %}">{{ m.created_at|date:"d M H:i:s" }}</td>
+<td>{{ m.customer }} <span class="muted small">{{ m.via }}</span></td><td>{{ m.source }}</td><td class="mono">{{ m.destination|e164 }}</td><td>{{ m.network|default:m.country|default:"—" }}</td>
+<td>{% if m.test %}<span class="pill free">Test, not sent</span>{% else %}{{ m.vendor|default:"—" }}{% if m.tried %} <span class="muted small" title="{% for t in m.tried %}{{ t.error }}; {% endfor %}">after {{ m.tried|length }} refusal{{ m.tried|length|pluralize }}</span>{% endif %}{% endif %}</td>
+<td>{% if m.status == "delivered" %}<span class="pill ok">Delivered</span>{% elif m.status == "submitted" or m.status == "queued" %}<span class="pill free">{{ m.get_status_display }}</span>{% elif m.status == "unknown" %}<span class="pill warn">Unknown</span>{% else %}<span class="pill bad">{{ m.get_status_display }}</span>{% endif %}
+{% if m.stat %}<span class="mono small">{{ m.stat }}{% if m.err %} {{ m.err }}{% endif %}</span>{% endif %}{% if m.reason %}<div class="muted small">{{ m.reason }}</div>{% endif %}</td>
+<td class="small">{% if m.dlr_state == "sent" %}Sent{% elif m.dlr_state == "none" %}<span class="muted">Not asked for</span>{% elif m.dlr_state == "failed" %}<span title="{{ m.dlr_error }}">Retrying</span>{% else %}{{ m.get_dlr_state_display }}{% endif %}</td>
+<td class="num mono">{{ m.charged|money }}</td><td class="muted small">{{ m.body|truncatechars:40 }}{% if m.part_total %} <span class="pill free">{{ m.part_num }}/{{ m.part_total }}</span>{% endif %}</td></tr>
+{% empty %}<tr><td colspan="10" class="empty">No wholesale messages in this range.</td></tr>{% endfor %}</tbody></table></div>
+{% include "partials/pager.html" %}
+{% endblock %}

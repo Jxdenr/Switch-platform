@@ -7,6 +7,8 @@ from crm import views as crm
 from inventory import views as inv
 from sms import views as sms
 from voice import views as voice
+from wholesale import api as wapi
+from wholesale import views as ws
 
 urlpatterns = [
     path("", core.dashboard, name="dashboard"),
@@ -45,6 +47,15 @@ urlpatterns = [
     path("sms/<int:pk>/resend/", sms.resend, name="sms_resend"),
     path("ingest/jasmin/", sms.ingest_jasmin, name="ingest_jasmin"),
     path("api/sms/inbound/", sms.api_inbound, name="api_inbound"),
+    # Wholesale
+    path("api/wholesale/send/", wapi.send, name="wholesale_send"),
+    path("wholesale/", ws.overview, name="ws_overview"),
+    path("wholesale/messages/", ws.message_list, name="ws_messages"),
+    path("wholesale/quality/", ws.quality, name="ws_quality"),
+    path("wholesale/routes/", ws.routes, name="ws_routes"),
+    path("wholesale/networks/", ws.networks, name="ws_networks"),
+    path("wholesale/accounts/<int:pk>/", ws.account, name="ws_account"),
+    path("wholesale/smpp/<int:pk>/", ws.smpp_settings, name="ws_smpp"),
     # Voice
     path("voice/cdrs/", voice.cdrs, name="cdrs"),
     path("voice/stats/", voice.stats, name="voice_stats"),

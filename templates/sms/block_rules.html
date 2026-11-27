@@ -6,19 +6,20 @@
 
 <div class="dashgrid rules-grid">
 <section class="card"><div class="panelhead"><h2>Rules</h2></div>
-<div class="seg" style="margin-bottom:12px"><a href="?" class="{% if not scope %}on{% endif %}">All {{ total }}</a>{% for k, l in scopes %}<a href="?scope={{ k }}" class="{% if scope == k %}on{% endif %}">{% if k == "all" %}Everyone{% elif k == "supplier" %}Suppliers{% elif k == "client" %}Clients{% else %}Billing groups{% endif %} {{ counts|get_item:k|default:0 }}</a>{% endfor %}</div>
+<div class="seg" style="margin-bottom:12px"><a href="?" class="{% if not scope %}on{% endif %}">All {{ total }}</a>{% for k, l in scopes %}<a href="?scope={{ k }}" class="{% if scope == k %}on{% endif %}">{% if k == "all" %}Everyone{% elif k == "supplier" %}Suppliers{% elif k == "client" %}Clients{% elif k == "customer" %}Wholesale{% else %}Billing groups{% endif %} {{ counts|get_item:k|default:0 }}</a>{% endfor %}</div>
 <div class="tablewrap"><table><thead><tr><th>Rule</th><th>Applies to</th><th class="num">Blocked (30d)</th><th></th></tr></thead><tbody>
 {% for r in rules %}<tr><td>{% if r.rule_type == "limit" %}Max <b>{{ r.value }}</b> SMS per number per hour{% else %}{{ r.get_rule_type_display }} <span class="mono"><b>{{ r.value }}</b></span>{% endif %}{% if r.reason %}<div class="muted small">{{ r.reason }}</div>{% endif %}</td>
-<td>{% if r.scope == "group" %}<a href="/billing-groups/{{ r.billing_group_id }}/edit/">{{ r.billing_group }}</a> <span class="muted small">billing group</span>{% elif r.account %}<a href="/accounts/{{ r.account_id }}/">{{ r.account }}</a> <span class="muted small">{{ r.scope }}</span>{% else %}Everyone{% endif %}</td>
+<td>{% if r.scope == "customer" %}<a href="/wholesale/accounts/{{ r.account_id }}/">{{ r.account }}</a> <span class="muted small">wholesale customer</span>{% elif r.scope == "group" %}<a href="/billing-groups/{{ r.billing_group_id }}/edit/">{{ r.billing_group }}</a> <span class="muted small">billing group</span>{% elif r.account %}<a href="/accounts/{{ r.account_id }}/">{{ r.account }}</a> <span class="muted small">{{ r.scope }}</span>{% else %}Everyone{% endif %}</td>
 <td class="num">{% if r.n_hits %}<a href="/sms/records/?status=blocked">{{ r.n_hits|intcomma }}</a>{% else %}<span class="muted">0</span>{% endif %}</td>
 <td><form method="post">{% csrf_token %}<button class="btn sm danger" name="delete" value="{{ r.pk }}">Remove</button></form></td></tr>
 {% empty %}<tr><td colspan="4" class="empty">No rules{% if scope %} here{% endif %}.</td></tr>{% endfor %}</tbody></table></div>
 </section>
 
 <form method="post" class="card stack" id="rule-form">{% csrf_token %}<h2>Add a rule</h2>
-<div class="field"><label>Applies to</label><div class="seg seg-radio" id="scope">{% for r in form.scope %}<label>{{ r.tag }}<span>{% if r.data.value == "all" %}Everyone{% elif r.data.value == "supplier" %}Supplier{% elif r.data.value == "client" %}Client{% else %}Billing group{% endif %}</span></label>{% endfor %}</div></div>
+<div class="field"><label>Applies to</label><div class="seg seg-radio" id="scope">{% for r in form.scope %}<label>{{ r.tag }}<span>{% if r.data.value == "all" %}Everyone{% elif r.data.value == "supplier" %}Supplier{% elif r.data.value == "client" %}Client{% elif r.data.value == "customer" %}Wholesale customer{% else %}Billing group{% endif %}</span></label>{% endfor %}</div></div>
 <div class="field" data-scope="supplier"><label for="id_supplier">Supplier</label>{{ form.supplier }}<span class="help">Everything this supplier sends us.</span>{% for e in form.supplier.errors %}<span class="err">{{ e }}</span>{% endfor %}</div>
 <div class="field" data-scope="client"><label for="id_client">Client</label>{{ form.client }}<span class="help">Everything going to this client (all their numbers).</span>{% for e in form.client.errors %}<span class="err">{{ e }}</span>{% endfor %}</div>
+<div class="field" data-scope="customer"><label for="id_customer">Wholesale customer</label>{{ form.customer }}<span class="help">Everything this customer sends us to route to vendors.</span>{% for e in form.customer.errors %}<span class="err">{{ e }}</span>{% endfor %}</div>
 <div class="field" data-scope="group"><label for="id_billing_group">Billing group</label>{{ form.billing_group }}<span class="help">Every number in this range, whichever client has it.</span>{% for e in form.billing_group.errors %}<span class="err">{{ e }}</span>{% endfor %}</div>
 <div class="field"><label for="id_rule_type">Rule</label>{{ form.rule_type }}</div>
 <div class="field"><label for="id_value" id="value-label">Value</label>{{ form.value }}<span class="help" id="value-help"></span>{% for e in form.value.errors %}<span class="err">{{ e }}</span>{% endfor %}</div>
@@ -30,10 +31,11 @@
 {% endblock %}
 {% block scripts %}<script>
 (function(){
-  const ph={sender:'SpamCo',prefix:'447700900',number:'447700900123',limit:'20'};
+  const ph={sender:'SpamCo',prefix:'447700900',number:'447700900123',limit:'20',content:'bit.ly'};
   const help={sender:['Sender ID','Exact sender name or number, not case sensitive, e.g. SpamCo'],
     prefix:['Number prefix','Destination numbers starting with this, international format, e.g. 447700900'],
     number:['Number','One destination number, international format, e.g. 447700900123'],
+    content:['Text','Block messages containing this text, not case sensitive, e.g. a short-link domain or a phishing phrase'],
     limit:['SMS per number per hour','After this many SMS to the same number within an hour, the rest are blocked. Catches SMS pumping.']};
   const type=document.getElementById('id_rule_type');
   function sync(){
