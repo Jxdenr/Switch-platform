@@ -1,5 +1,6 @@
 """Numbers behind the dashboard: headline totals with change vs the previous period,
 a traffic chart, top suppliers and clients, and the things that need attention."""
+import math
 from datetime import datetime, time, timedelta
 from decimal import Decimal
 
@@ -165,26 +166,49 @@ def _key(v, hourly):
     return v
 
 
-def chart(points, width=640, height=190, pad_b=22):
-    """SVG geometry for a bar chart: bar = due in, darker part = margin kept."""
+def _nice_step(top, lines=3):
+    """A round step (1, 2, 2.5 or 5 x 10^n) so about `lines` gridlines cover `top`."""
+    raw = top / lines
+    mag = 10 ** math.floor(math.log10(raw))
+    for m in (1, 2, 2.5, 5, 10):
+        if raw <= m * mag:
+            return m * mag
+    return 10 * mag
+
+
+def chart(points, width=640, height=230, pad_b=22, pad_l=40):
+    """SVG geometry for a bar chart: bar = due in, darker part = margin kept. Light gridlines with values on the left."""
     if not points:
         return None
     top = max((float(i) for _, i, _ in points), default=0) or 1
+    step = _nice_step(top)
+    scale = step * math.ceil(top / step - 1e-9)
     n = len(points)
-    slot = width / n
+    plot_w = width - pad_l
+    slot = plot_w / n
     bw = min(max(2.0, slot * 0.7), 40.0)
     plot_h = height - pad_b
+    usable = plot_h - 8
+    grid = []
+    k = 1
+    while k * step <= scale + 1e-9:
+        v = k * step
+        grid.append({"y": round(plot_h - v / scale * usable, 1),
+                     "label": f"{v:,.0f}" if step >= 1 else f"{v:,.2f}"})
+        k += 1
     bars = []
     every = max(1, n // 7)
-    for idx, (k, i, o) in enumerate(points):
-        x = idx * slot + (slot - bw) / 2
-        h_in = float(i) / top * (plot_h - 8)
-        h_m = max(0.0, float(i - o)) / top * (plot_h - 8)
-        label = k.strftime("%H:%M") if isinstance(k, datetime) else k.strftime("%d %b")
+    for idx, (key, i, o) in enumerate(points):
+        x = pad_l + idx * slot + (slot - bw) / 2
+        h_in = float(i) / scale * usable
+        h_m = max(0.0, float(i - o)) / scale * usable
+        label = key.strftime("%H:%M") if isinstance(key, datetime) else key.strftime("%d %b")
         bars.append({"x": round(x, 1), "w": round(bw, 1), "y_in": round(plot_h - h_in, 1), "h_in": round(h_in, 1),
                      "y_m": round(plot_h - h_m, 1), "h_m": round(h_m, 1), "label": label,
-                     "show_label": idx % every == 0, "lx": round(x + bw / 2, 1), "due_in": i, "margin": i - o})
-    return {"bars": bars, "w": width, "h": height, "base": plot_h, "top": top, "ly": height - 6}
+                     "show_label": idx % every == 0, "lx": round(x + bw / 2, 1), "due_in": i, "margin": i - o,
+                     "slot_x": round(pad_l + idx * slot, 1), "slot_w": round(slot, 1)})
+    return {"bars": bars, "w": width, "h": height, "base": plot_h, "top": top, "ly": height - 6,
+            "grid": grid, "pad_l": pad_l, "gx": pad_l - 6}
 
 
 def top_accounts(start, end, channel, field, currency=None):

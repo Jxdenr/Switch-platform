@@ -18,7 +18,7 @@
 </nav>
 {% if tab == "groups" %}
 <div class="tablewrap"><table><thead><tr><th>Title</th><th>Country</th><th>Routing</th><th>Currency</th><th></th></tr></thead><tbody>
-{% for g in groups %}<tr><td><a href="/numbers/?group={{ g.pk }}">{{ g.title }}</a></td><td>{{ g.country }}</td><td>{{ g.get_routing_type_display }}</td><td>{{ g.currency }}</td><td><a class="btn sm" href="/billing-groups/{{ g.pk }}/edit/">Edit</a></td></tr>
+{% for g in groups %}<tr><td><a href="/numbers/?group={{ g.pk }}">{{ g.title }}</a></td><td>{{ g.country }}</td><td>{{ g.get_routing_type_display }}</td><td>{{ g.currency }}</td><td class="rowacts"><a href="/billing-groups/{{ g.pk }}/edit/">Edit</a></td></tr>
 {% empty %}<tr><td colspan="5" class="empty">No billing groups for this supplier yet.</td></tr>{% endfor %}</tbody></table></div>
 {% elif tab == "numbers" %}
 <div class="tablewrap"><table><thead><tr><th>Number</th><th>Billing group</th><th>Country</th><th>Terms</th><th>Since</th></tr></thead><tbody>
@@ -41,13 +41,13 @@
 <div class="card"><p style="margin-top:0">Client portal logins see only this account's numbers and SMS. Add them in <a href="/admin/auth/user/add/">Users &amp; settings</a>, then set their profile role to "Client portal" and account to {{ acc }}.</p>
 {% for p in users %}<div>{{ p.user.username }} · {{ p.get_role_display }}</div>{% empty %}<p class="muted">No portal users yet.</p>{% endfor %}</div>
 {% else %}
-<div class="grid2">
+<div class="grid2 panels">
 {% for p in panels %}{% if p.group == tab or tab == "connections" and p.group == "sms" or tab == "sms" and p.group == "sms" %}
 <section class="card"><div class="panelhead"><h2>{{ p.label }}</h2><a class="btn sm" href="/accounts/{{ acc.pk }}/{{ p.kind }}/new/">+ Add</a></div>
 <div class="tablewrap"><table><thead><tr>{% for c in p.cols %}<th>{{ c|capfirst }}</th>{% endfor %}{% if p.kind == "smpp-user" or p.kind == "smsc" %}<th>Bound</th>{% endif %}<th></th></tr></thead><tbody>
 {% for r in p.rows %}<tr>{% for f in p.fields %}<td>{{ r|attr:f }}</td>{% endfor %}
 {% if p.kind == "smpp-user" or p.kind == "smsc" %}<td>{% if not r.enabled %}<span class="pill free">Disabled</span>{% elif r.bound %}<span class="pill ok">Up</span>{% else %}<span class="pill bad">Down</span>{% endif %}</td>{% endif %}
-<td><a class="btn sm" href="/accounts/{{ acc.pk }}/{{ p.kind }}/{{ r.pk }}/">Edit</a></td></tr>
+<td class="rowacts"><a href="/accounts/{{ acc.pk }}/{{ p.kind }}/{{ r.pk }}/">Edit</a></td></tr>
 {% empty %}<tr><td colspan="8" class="empty">None yet.</td></tr>{% endfor %}</tbody></table></div></section>
 {% endif %}{% endfor %}
 </div>

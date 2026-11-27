@@ -30,19 +30,23 @@
     <small>{% if unrouted.total %}<a href="/sms/records/?status=no_route">To numbers with no client</a> · <a href="/numbers/allocate/">Allocate</a>{% else %}Everything had a client{% endif %}{% if unrouted.blocked %} · {{ unrouted.blocked|intcomma }} blocked{% endif %}</small></div>
   {% endif %}
 </div>
-{% if other_currencies %}<p class="muted small curnote">Also this period, shown separately because currencies are not added together:
-  {% for c, s, i, o in other_currencies %}<span class="pill">{{ c }}</span> due in {{ s }}{{ i|money }}{% if not is_client %}, due out {{ s }}{{ o|money }}{% endif %}{% if not forloop.last %} · {% endif %}{% endfor %}. Chart and top lists are in {{ cur }}.</p>{% endif %}
+{% if other_currencies %}<div class="infostrip" role="note"><svg viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="1.5" aria-hidden="true"><circle cx="8" cy="8" r="6.2"/><path d="M8 7.2v4M8 4.8v.1"/></svg>
+  <span>Also this period, shown separately because currencies are not added together:
+  {% for c, s, i, o in other_currencies %}<b>{{ c }}</b> due in {{ s }}{{ i|money }}{% if not is_client %}, due out {{ s }}{{ o|money }}{% endif %}{% if not forloop.last %} · {% endif %}{% endfor %}</span>
+  <span class="infostrip-end">Chart and top lists in {{ cur }}</span></div>{% endif %}
 
 <div class="dashgrid">
-  <section class="card"><div class="panelhead"><h2>{% if is_client %}Earnings{% else %}Due in and margin kept{% endif %} ({{ cur }}) by {% if period == "today" %}hour{% else %}day{% endif %}</h2>
+  <section class="card chartcard"><div class="panelhead"><h2>{% if is_client %}Earnings{% else %}Due in and margin kept{% endif %} ({{ cur }}) by {% if period == "today" %}hour{% else %}day{% endif %}</h2>
     {% if not is_client %}<div class="legend"><span><i class="sw in"></i>Due in</span><span><i class="sw m"></i>Margin kept</span></div>{% endif %}</div>
     {% if chart %}<svg class="chart" viewBox="0 0 {{ chart.w }} {{ chart.h }}" role="img" aria-label="Due in by {% if period == 'today' %}hour{% else %}day{% endif %}">
-      <line x1="0" x2="{{ chart.w }}" y1="{{ chart.base }}" y2="{{ chart.base }}" class="axis"/>
-      {% for b in chart.bars %}<g><title>{{ b.label }}: due in {{ b.due_in|money }}, margin {{ b.margin|money }}</title>
+      {% for g in chart.grid %}<line x1="{{ chart.pad_l }}" x2="{{ chart.w }}" y1="{{ g.y }}" y2="{{ g.y }}" class="gridline"/><text x="{{ chart.gx }}" y="{{ g.y }}" dy="3" text-anchor="end">{{ g.label }}</text>{% endfor %}
+      <line x1="{{ chart.pad_l }}" x2="{{ chart.w }}" y1="{{ chart.base }}" y2="{{ chart.base }}" class="axis"/>
+      {% for b in chart.bars %}<g class="col" tabindex="0" data-tip="{{ b.label }}: due in {{ sym }}{{ b.due_in|money }}{% if not is_client %}, margin {{ sym }}{{ b.margin|money }}{% endif %}" aria-label="{{ b.label }}: due in {{ b.due_in|money }}{% if not is_client %}, margin {{ b.margin|money }}{% endif %}">
+        <rect class="hit" x="{{ b.slot_x }}" y="0" width="{{ b.slot_w }}" height="{{ chart.base }}"/>
         <rect x="{{ b.x }}" y="{{ b.y_in }}" width="{{ b.w }}" height="{{ b.h_in }}" rx="2" class="{% if is_client %}m{% else %}in{% endif %}"/>
         {% if not is_client %}<rect x="{{ b.x }}" y="{{ b.y_m }}" width="{{ b.w }}" height="{{ b.h_m }}" rx="2" class="m"/>{% endif %}
         {% if b.show_label %}<text x="{{ b.lx }}" y="{{ chart.ly }}" text-anchor="middle">{{ b.label }}</text>{% endif %}</g>{% endfor %}
-    </svg>{% endif %}
+    </svg><div class="charttip" hidden></div>{% endif %}
   </section>
 
   {% if is_client %}<section class="card"><h2>Your account</h2>
@@ -58,20 +62,20 @@
     </ul></section>{% endif %}
   {% if not is_client %}<section class="card"><h2>Needs attention</h2>
     <ul class="checklist">
-      <li><a href="/binds/">{% if down %}<span class="pill bad">{{ down|length }}</span> binds down{% else %}<span class="pill ok">OK</span> All binds up{% endif %}</a>
+      <li><a href="/binds/"{% if down %} class="alert"{% endif %}>{% if down %}<span class="pill bad">{{ down|length }}</span> binds down <span aria-hidden="true">→</span>{% else %}<span class="pill ok">OK</span> All binds up{% endif %}</a>
         {% if down %}<ul>{% for b in down|slice:":4" %}<li>{{ b.account }} · {{ b.title }}</li>{% endfor %}{% if down|length > 4 %}<li class="muted">and {{ down|length|add:"-4" }} more</li>{% endif %}</ul>{% endif %}</li>
       <li><a href="/sms/records/?status=failed">{% if n_failed %}<span class="pill warn">{{ n_failed|intcomma }}</span> SMS not delivered to clients{% else %}<span class="pill ok">OK</span> No delivery failures{% endif %}</a></li>
-      <li><a href="/numbers/?status=free"><span class="pill free">{{ alloc_pct|floatformat:0 }}%</span> numbers allocated</a><div class="bar"><i style="width:{{ alloc_pct|floatformat:0 }}%"></i></div><div class="muted small">{{ n_alloc|intcomma }} of {{ n_numbers|intcomma }}</div></li>
+      <li><a href="/numbers/?status=free"><span class="pill free">{{ alloc_pct|floatformat:0 }}%</span> numbers allocated<span class="end muted">{{ n_alloc|intcomma }} / {{ n_numbers|intcomma }}</span></a><div class="bar"><i style="width:{{ alloc_pct|floatformat:0 }}%"></i></div></li>
     </ul></section>{% endif %}
 </div>
 
 {% if not is_client %}
 <div class="grid2">
-  <section class="card"><div class="panelhead"><h2>Top suppliers</h2><a class="btn sm" href="/sms/stats/?by=supplier">All</a></div>
+  <section class="card"><div class="panelhead"><h2>Top suppliers</h2><a class="textlink" href="/sms/stats/?by=supplier">All</a></div>
     <table class="rank"><thead><tr><th>Supplier</th>{% if channel != "voice" %}<th class="num">SMS</th>{% endif %}{% if channel != "sms" and has_voice %}<th class="num">Min</th>{% endif %}<th class="num">Due in ({{ cur }})</th></tr></thead><tbody>
     {% for r in top_suppliers %}<tr><td><a href="/accounts/{{ r.id }}/?tab=statement">{{ r.title }}</a><div class="bar thin"><i style="width:{{ r.share|floatformat:0 }}%"></i></div></td>{% if channel != "voice" %}<td class="num">{{ r.sms|intcomma }}</td>{% endif %}{% if channel != "sms" and has_voice %}<td class="num">{{ r.minutes|floatformat:0 }}</td>{% endif %}<td class="num"><b>{{ r.amount|money }}</b></td></tr>
     {% empty %}<tr><td colspan="4" class="empty">No traffic in this period.</td></tr>{% endfor %}</tbody></table></section>
-  <section class="card"><div class="panelhead"><h2>Top clients</h2><a class="btn sm" href="/sms/stats/?by=client">All</a></div>
+  <section class="card"><div class="panelhead"><h2>Top clients</h2><a class="textlink" href="/sms/stats/?by=client">All</a></div>
     <table class="rank"><thead><tr><th>Client</th>{% if channel != "voice" %}<th class="num">SMS</th>{% endif %}{% if channel != "sms" and has_voice %}<th class="num">Min</th>{% endif %}<th class="num">Due out ({{ cur }})</th></tr></thead><tbody>
     {% for r in top_clients %}<tr><td><a href="/accounts/{{ r.id }}/?tab=statement">{{ r.title }}</a><div class="bar thin"><i style="width:{{ r.share|floatformat:0 }}%"></i></div></td>{% if channel != "voice" %}<td class="num">{{ r.sms|intcomma }}</td>{% endif %}{% if channel != "sms" and has_voice %}<td class="num">{{ r.minutes|floatformat:0 }}</td>{% endif %}<td class="num"><b>{{ r.amount|money }}</b></td></tr>
     {% empty %}<tr><td colspan="4" class="empty">No traffic in this period.</td></tr>{% endfor %}</tbody></table></section>
@@ -81,3 +85,12 @@
   <p style="margin:10px 0 0"><a href="/sms/records/?status=failed">See all failed SMS</a></p></details>{% endif %}
 {% endif %}
 {% endblock %}
+{% block scripts %}<script>
+/* Chart: a small label above the bar you point at (or tab to). */
+(function(){const svg=document.querySelector('.chart');if(!svg)return;const tip=document.querySelector('.charttip'),card=svg.closest('.card');
+ function show(g){const r=g.querySelector('rect:not(.hit)');const br=r.getBoundingClientRect(),cr=card.getBoundingClientRect();
+  tip.textContent=g.dataset.tip;tip.hidden=false;tip.style.left=(br.left-cr.left+br.width/2)+'px';tip.style.top=(br.top-cr.top-8)+'px';}
+ svg.querySelectorAll('g.col').forEach(g=>{g.addEventListener('mouseenter',()=>show(g));g.addEventListener('focus',()=>show(g));
+  g.addEventListener('mouseleave',()=>tip.hidden=true);g.addEventListener('blur',()=>tip.hidden=true);});
+})();
+</script>{% endblock %}
